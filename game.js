@@ -109,7 +109,7 @@ function makePlayerMesh(pd, teamColor, isHome) {
   
   // Scale by height
   const htInches = parseHeight(pd.ht);
-  const scale = htInches / 78; // 6'6" is base
+  const scale = (htInches / 78) * 0.8; // 6'6" is base, slightly scale down
   group.scale.setScalar(scale);
 
   // Map appropriate 2k26 generated portrait to each animal
@@ -122,13 +122,77 @@ function makePlayerMesh(pd, teamColor, isHome) {
   else if(teamColor === 0x1A7A1A) texPath = 'assets/jett_panther_1775049031196.png'; // Thorns fill-in
   else texPath = 'assets/mane_horse_1775063149935.png'; // Target fill-in
 
-  // Use Billboard Sprites for players to look exactly like the generated images
+  // Construct 3D Articulated Body
+  const body = new THREE.Group();
+  body.position.y = 1.2;
+  group.add(body);
+  
+  // Torso
+  const torsoGeo = new THREE.BoxGeometry(0.6, 0.9, 0.4);
+  const torsoMat = new THREE.MeshStandardMaterial({ color: teamColor });
+  const torso = new THREE.Mesh(torsoGeo, torsoMat);
+  torso.castShadow = true;
+  body.add(torso);
+
+  // Head with Portrait
+  const headGroup = new THREE.Group();
+  headGroup.position.y = 0.75;
+  body.add(headGroup);
+  
+  const headGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
   const map = new THREE.TextureLoader().load(texPath);
-  const material = new THREE.SpriteMaterial({ map: map, color: 0xffffff });
-  const sprite = new THREE.Sprite(material);
-  sprite.position.set(0, 1.3, 0); // Lift up above the court
-  sprite.scale.set(1.8, 2.6, 1);  // Adjust sprite aspect ratio slightly to fit portraits
-  group.add(sprite);
+  const faceMat = new THREE.MeshStandardMaterial({ map: map });
+  const furMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
+  // Box geometry materials order: px, nx, py, ny, pz (front), nz
+  const headMats = [furMat, furMat, furMat, furMat, faceMat, furMat];
+  const head = new THREE.Mesh(headGeo, headMats);
+  head.castShadow = true;
+  headGroup.add(head);
+
+  // Arms
+  const armGeo = new THREE.BoxGeometry(0.2, 0.8, 0.2);
+  const armMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
+  
+  const armL = new THREE.Group();
+  armL.position.set(-0.4, 0.3, 0);
+  const armLMesh = new THREE.Mesh(armGeo, armMat);
+  armLMesh.position.y = -0.3; // pivot shoulder
+  armLMesh.castShadow = true;
+  armL.add(armLMesh);
+  body.add(armL);
+  
+  const armR = new THREE.Group();
+  armR.position.set(0.4, 0.3, 0);
+  const armRMesh = new THREE.Mesh(armGeo, armMat);
+  armRMesh.position.y = -0.3;
+  armRMesh.castShadow = true;
+  armR.add(armRMesh);
+  body.add(armR);
+
+  // Legs
+  const legGeo = new THREE.BoxGeometry(0.25, 0.9, 0.25);
+  const legMat = new THREE.MeshStandardMaterial({ color: teamColor });
+  
+  const legL = new THREE.Group();
+  legL.position.set(-0.15, -0.45, 0);
+  const legLMesh = new THREE.Mesh(legGeo, legMat);
+  legLMesh.position.y = -0.45; // pivot hip
+  legLMesh.castShadow = true;
+  legL.add(legLMesh);
+  body.add(legL);
+
+  const legR = new THREE.Group();
+  legR.position.set(0.15, -0.45, 0);
+  const legRMesh = new THREE.Mesh(legGeo, legMat);
+  legRMesh.position.y = -0.45;
+  legRMesh.castShadow = true;
+  legR.add(legRMesh);
+  body.add(legR);
+
+  // Save references for animation
+  group.animParts = { armL, armR, legL, legR, body, headGroup };
+  group.animTimer = Math.random() * 10;
+  group.isShooting = false;
 
   // Ground ring
   const ringGeo = new THREE.RingGeometry(0.6, 0.7, 16);
@@ -281,10 +345,23 @@ function updatePhysics(dt) {
     }
   } else {
     // Dribble
-    const handPos = ballHolder.position.clone();
-    handPos.x += 0.5;
-    handPos.y = 0.5 + Math.abs(Math.sin(t*10))*0.6; // Bounce
-    ball.position.copy(handPos);
+    const isPlayerShootingMode = (ballHolder === p1CtrlPlayer && shotMeterActive);
+    
+    if (isPlayerShootingMode) {
+      // Ball in hands overhead if shooting
+      const handPos = ballHolder.position.clone();
+      const offset = new THREE.Vector3(0, 2.5, 0.4);
+      offset.applyEuler(new THREE.Euler(0, ballHolder.rotation.y, 0));
+      handPos.add(offset);
+      ball.position.copy(handPos);
+    } else {
+      const handPos = ballHolder.position.clone();
+      // Relative offset for hands: x=0.4 (right), y=bounce, z=0.3 (forward)
+      const offset = new THREE.Vector3(0.4, 0.5 + Math.abs(Math.sin(t*15))*0.6, 0.3);
+      offset.applyEuler(new THREE.Euler(0, ballHolder.rotation.y, 0));
+      handPos.add(offset);
+      ball.position.copy(handPos);
+    }
   }
 }
 
@@ -368,6 +445,56 @@ function updateMovement(dt) {
     // Rings
     p.ring.visible = (p === p1CtrlPlayer || p === p2CtrlPlayer);
     if(p.ring.visible) p.ringMat.color.setHex(p === p1CtrlPlayer ? 0xffd700 : 0x00ff00);
+
+    // Animation
+    const speed = p.vel.length();
+    if(speed > 0.5) {
+      // Rotation: Face movement direction smoothly
+      const targetAngle = Math.atan2(p.vel.x, p.vel.z);
+      // Smooth rotation shortest path
+      let diff = targetAngle - p.rotation.y;
+      while(diff < -Math.PI) diff += Math.PI*2;
+      while(diff > Math.PI) diff -= Math.PI*2;
+      p.rotation.y += diff * 10 * dt;
+      
+      // Running animation
+      p.animTimer += dt * speed * 3;
+      const sp = Math.sin(p.animTimer);
+      p.animParts.armL.rotation.x = sp;
+      p.animParts.armR.rotation.x = -sp;
+      p.animParts.legL.rotation.x = -sp;
+      p.animParts.legR.rotation.x = sp;
+      p.animParts.body.position.y = 1.2 + Math.abs(Math.sin(p.animTimer*2)) * 0.1;
+    } else {
+      // Idle animation
+      p.animTimer += dt * 3;
+      p.animParts.armL.rotation.x = Math.sin(p.animTimer) * 0.05;
+      p.animParts.armR.rotation.x = -Math.sin(p.animTimer) * 0.05;
+      p.animParts.legL.rotation.x = 0;
+      p.animParts.legR.rotation.x = 0;
+      p.animParts.body.position.y = 1.2 + Math.sin(p.animTimer * 0.5) * 0.03;
+      
+      // Face hoop if on offense, or face ball if on defense
+      if(ballHolder && p !== ballHolder) {
+         const target = (p.isHome === ballHolder.isHome) ? (p.isHome ? hoop2 : hoop1).rim.position : ball.position;
+         const targetAngle = Math.atan2(target.x - p.position.x, target.z - p.position.z);
+         let diff = targetAngle - p.rotation.y;
+         while(diff < -Math.PI) diff += Math.PI*2;
+         while(diff > Math.PI) diff -= Math.PI*2;
+         p.rotation.y += diff * 5 * dt;
+      }
+    }
+    
+    // Override arms for shooting
+    if(shotShooter === p || (ballHolder === p && p === p1CtrlPlayer && shotMeterActive)) {
+      p.animParts.armL.rotation.x = -Math.PI/2 - 0.5;
+      p.animParts.armR.rotation.x = -Math.PI/2 - 0.5;
+    }
+    // Override arm for dribbling
+    else if(ballHolder === p) {
+      // Hold ball with right hand
+      p.animParts.armR.rotation.x = -Math.PI/4 + Math.sin(t*15)*0.3;
+    }
   });
 }
 
