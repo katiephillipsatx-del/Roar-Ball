@@ -104,79 +104,31 @@ function buildBall() {
   ball.position.set(0, 0.24, 0);
 }
 
-// Player generator
 function makePlayerMesh(pd, teamColor, isHome) {
   const group = new THREE.Group();
   
   // Scale by height
   const htInches = parseHeight(pd.ht);
-  const scale = htInches / 78; // 6'6" is base (78")
+  const scale = htInches / 78; // 6'6" is base
   group.scale.setScalar(scale);
 
-  // Base materials
-  let skinCol = 0xddaa77;
-  let jerseyCol = teamColor;
-  let nameStr = pd.name;
-  let numStr = pd.num || Math.floor(Math.random()*99);
+  // Map appropriate 2k26 generated portrait to each animal
+  let texPath = 'assets/will_goat_1775049016052.png';
+  if(pd.name === 'Will Harris') texPath = 'assets/will_goat_1775049016052.png';
+  else if(pd.name === 'Jett Fillmore') texPath = 'assets/jett_panther_1775049031196.png';
+  else if(pd.type === 'Giraffe') texPath = 'assets/lenny_giraffe_1775063115967.png';
+  else if(pd.type === 'Rhino') texPath = 'assets/archie_rhino_1775063133384.png';
+  else if(pd.name === 'Mane Attraction' || pd.type === 'Horse') texPath = 'assets/mane_horse_1775063149935.png';
+  else if(teamColor === 0x1A7A1A) texPath = 'assets/jett_panther_1775049031196.png'; // Thorns fill-in
+  else texPath = 'assets/mane_horse_1775063149935.png'; // Target fill-in
 
-  // Custom animal features (condensed)
-  if(pd.type === 'Panther') skinCol = 0x111A0A; // Black panther
-  else if(pd.type === 'Giraffe') { skinCol = 0xC8A46E; }
-  else if(pd.type === 'Komodo' || pd.type === 'Alligator' || pd.type === 'Lizard') { skinCol = 0x4A8C3F; }
-  else if(pd.type === 'Rhino' || pd.type === 'Gorilla' || pd.type === 'Bull' || pd.type === 'Moose' || pd.type === 'Walrus') { skinCol = 0x333333; }
-  else if(pd.type === 'PolarBear' || pd.type === 'Ostrich') skinCol = 0xF5F5F5;
-  else if(pd.type === 'PurpleBull') skinCol = 0x2E0A50;
-  else if(pd.type === 'BlackMamba') skinCol = 0x1a1a1a;
-  else if(pd.type === 'FireSalamander' || pd.type === 'Salamander') skinCol = 0x1A100B;
-
-  // Body
-  const isSnek = pd.type.includes('Mamba') || pd.type === 'Sidewinder';
-  if(!isSnek) {
-    const legGeo = new THREE.CylinderGeometry(0.15, 0.12, 0.7, 12);
-    const legMat = new THREE.MeshStandardMaterial({ color: skinCol });
-    const legL = new THREE.Mesh(legGeo, legMat); legL.position.set(-0.2, 0.35, 0);
-    const legR = new THREE.Mesh(legGeo, legMat); legR.position.set(0.2, 0.35, 0);
-    group.add(legL); group.add(legR);
-    group.legL = legL; group.legR = legR;
-
-    const bodyGeo = new THREE.CylinderGeometry(0.42, 0.38, 1.05, 16);
-    // Squash the cylinder on the Z axis slightly so they aren't completely round
-    bodyGeo.scale(1, 1, 0.7);
-    const bodyMat = new THREE.MeshStandardMaterial({ color: jerseyCol });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.set(0, 1.25, 0);
-    group.add(body);
-
-    const armGeo = new THREE.CylinderGeometry(0.12, 0.1, 0.8, 10);
-    const armMat = new THREE.MeshStandardMaterial({ color: skinCol });
-    const armL = new THREE.Mesh(armGeo, armMat); armL.position.set(-0.55, 1.2, 0); armL.rotation.z = Math.PI / 10;
-    const armR = new THREE.Mesh(armGeo, armMat); armR.position.set(0.55, 1.2, 0); armR.rotation.z = -Math.PI / 10;
-    group.add(armL); group.add(armR);
-  } else {
-    // Snek body
-    const snekGeo = new THREE.CylinderGeometry(0.3, 0.5, 1.5);
-    const snekMat = new THREE.MeshStandardMaterial({ color: skinCol });
-    const snek = new THREE.Mesh(snekGeo, snekMat);
-    snek.position.set(0, 0.75, 0);
-    group.add(snek);
-  }
-
-  // Head
-  const headGeo = new THREE.SphereGeometry(pd.type === 'Ostrich' ? 0.26 : 0.42, 16, 16);
-  const headMat = new THREE.MeshStandardMaterial({ color: skinCol });
-  const head = new THREE.Mesh(headGeo, headMat);
-  let headY = 2.0;
-
-  if(pd.type === 'Giraffe') {
-    // Add neck
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 1.0), new THREE.MeshStandardMaterial({ color: skinCol }));
-    neck.position.set(0, 2.2, 0.2);
-    group.add(neck);
-    headY = 2.8;
-  }
-  
-  head.position.set(0, headY, 0);
-  group.add(head);
+  // Use Billboard Sprites for players to look exactly like the generated images
+  const map = new THREE.TextureLoader().load(texPath);
+  const material = new THREE.SpriteMaterial({ map: map, color: 0xffffff });
+  const sprite = new THREE.Sprite(material);
+  sprite.position.set(0, 1.3, 0); // Lift up above the court
+  sprite.scale.set(1.8, 2.6, 1);  // Adjust sprite aspect ratio slightly to fit portraits
+  group.add(sprite);
 
   // Ground ring
   const ringGeo = new THREE.RingGeometry(0.6, 0.7, 16);
