@@ -11,6 +11,11 @@ let scene, camera, renderer, clock;
 let p1Team, p2Team, p1Idx, p2Idx, is2P;
 let mode = 'MENU';
 let players = [];
+let playerBaseModel = null;
+let playerAnimations = [];
+let playerDribbleAnim = null;
+let playerShootAnim = null;
+let mixers = [];
 let ball, ballVel = new THREE.Vector3(), ballHolder = null;
 let dt, t = 0;
 let qtr = 1, timeClock = 720, shotClock = 24.0;
@@ -107,12 +112,62 @@ function buildBall() {
 function makePlayerMesh(pd, teamColor, isHome) {
   const group = new THREE.Group();
   
-  // Scale by height
+  // Scale
   const htInches = parseHeight(pd.ht);
-  const scale = (htInches / 78) * 0.8; // 6'6" is base, slightly scale down
+  const scale = (htInches / 78) * 1.2; 
   group.scale.setScalar(scale);
 
-  // Map appropriate 2k26 generated portrait to each animal
+  // Use SkeletonUtils to clone the GLB smoothly across players
+  let character = new THREE.Group();
+  let mixer = null;
+  let actionIdle = null;
+  let actionRun = null;
+  let actionDribble = null;
+  let actionShoot = null;
+
+  if (playerBaseModel) {
+    if (typeof THREE.SkeletonUtils !== 'undefined') {
+      character = THREE.SkeletonUtils.clone(playerBaseModel);
+    } else {
+      character = playerBaseModel.clone();
+    }
+    character.position.y = 0;
+    
+    // Attempt Animation Mixers
+    if (playerAnimations && playerAnimations.length > 0) {
+      mixer = new THREE.AnimationMixer(character);
+      mixers.push(mixer);
+      
+      // Let's assume idx 0 is idles/bounces
+      actionIdle = mixer.clipAction(playerAnimations[0]);
+      actionIdle.play();
+      
+      if(playerAnimations.length > 1) {
+         actionRun = mixer.clipAction(playerAnimations[1]);
+      }
+    } else if (playerDribbleAnim) {
+      // It might only have dribble anim loaded from second file
+      mixer = new THREE.AnimationMixer(character);
+      mixers.push(mixer);
+    }
+
+    if (mixer && playerDribbleAnim) {
+      actionDribble = mixer.clipAction(playerDribbleAnim);
+    }
+    if (mixer && playerShootAnim) {
+      actionShoot = mixer.clipAction(playerShootAnim);
+      actionShoot.setLoop(THREE.LoopOnce, 1);
+      actionShoot.clampWhenFinished = true;
+    }
+  } else {
+    // Basic Geometry Fallback just in case load fails
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.8, 0.4), new THREE.MeshStandardMaterial({color: teamColor}));
+    box.position.y = 0.9;
+    character.add(box);
+  }
+  group.add(character);
+
+  // Position portrait as floating sprite above head to identify teammates (it's retro style!)
   let texPath = 'assets/will_goat_1775049016052.png';
   if(pd.name === 'Will Harris') texPath = 'assets/will_goat_1775049016052.png';
   else if(pd.name === 'Jett Fillmore') texPath = 'assets/jett_panther_1775049031196.png';
@@ -122,77 +177,12 @@ function makePlayerMesh(pd, teamColor, isHome) {
   else if(teamColor === 0x1A7A1A) texPath = 'assets/jett_panther_1775049031196.png'; // Thorns fill-in
   else texPath = 'assets/mane_horse_1775063149935.png'; // Target fill-in
 
-  // Construct 3D Articulated Body
-  const body = new THREE.Group();
-  body.position.y = 1.2;
-  group.add(body);
-  
-  // Torso
-  const torsoGeo = new THREE.BoxGeometry(0.6, 0.9, 0.4);
-  const torsoMat = new THREE.MeshStandardMaterial({ color: teamColor });
-  const torso = new THREE.Mesh(torsoGeo, torsoMat);
-  torso.castShadow = true;
-  body.add(torso);
-
-  // Head with Portrait
-  const headGroup = new THREE.Group();
-  headGroup.position.y = 0.75;
-  body.add(headGroup);
-  
-  const headGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
   const map = new THREE.TextureLoader().load(texPath);
-  const faceMat = new THREE.MeshStandardMaterial({ map: map });
-  const furMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
-  // Box geometry materials order: px, nx, py, ny, pz (front), nz
-  const headMats = [furMat, furMat, furMat, furMat, faceMat, furMat];
-  const head = new THREE.Mesh(headGeo, headMats);
-  head.castShadow = true;
-  headGroup.add(head);
-
-  // Arms
-  const armGeo = new THREE.BoxGeometry(0.2, 0.8, 0.2);
-  const armMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
-  
-  const armL = new THREE.Group();
-  armL.position.set(-0.4, 0.3, 0);
-  const armLMesh = new THREE.Mesh(armGeo, armMat);
-  armLMesh.position.y = -0.3; // pivot shoulder
-  armLMesh.castShadow = true;
-  armL.add(armLMesh);
-  body.add(armL);
-  
-  const armR = new THREE.Group();
-  armR.position.set(0.4, 0.3, 0);
-  const armRMesh = new THREE.Mesh(armGeo, armMat);
-  armRMesh.position.y = -0.3;
-  armRMesh.castShadow = true;
-  armR.add(armRMesh);
-  body.add(armR);
-
-  // Legs
-  const legGeo = new THREE.BoxGeometry(0.25, 0.9, 0.25);
-  const legMat = new THREE.MeshStandardMaterial({ color: teamColor });
-  
-  const legL = new THREE.Group();
-  legL.position.set(-0.15, -0.45, 0);
-  const legLMesh = new THREE.Mesh(legGeo, legMat);
-  legLMesh.position.y = -0.45; // pivot hip
-  legLMesh.castShadow = true;
-  legL.add(legLMesh);
-  body.add(legL);
-
-  const legR = new THREE.Group();
-  legR.position.set(0.15, -0.45, 0);
-  const legRMesh = new THREE.Mesh(legGeo, legMat);
-  legRMesh.position.y = -0.45;
-  legRMesh.castShadow = true;
-  legR.add(legRMesh);
-  body.add(legR);
-
-  // Save references for animation
-  group.animParts = { armL, armR, legL, legR, body, headGroup };
-  group.animTimer = Math.random() * 10;
-  group.isShooting = false;
+  const spriteMat = new THREE.SpriteMaterial({ map: map });
+  const sprite = new THREE.Sprite(spriteMat);
+  sprite.position.set(0, 3, 0); // Above head
+  sprite.scale.set(0.6, 0.8, 1);
+  group.add(sprite);
 
   // Ground ring
   const ringGeo = new THREE.RingGeometry(0.6, 0.7, 16);
@@ -211,6 +201,16 @@ function makePlayerMesh(pd, teamColor, isHome) {
   group.bench = false;
   group.vel = new THREE.Vector3();
   group.posTarget = new THREE.Vector3();
+  
+  // Animation data
+  group.mixer = mixer;
+  group.actionIdle = actionIdle;
+  group.actionRun = actionRun;
+  group.actionDribble = actionDribble;
+  group.actionShoot = actionShoot;
+  group.currentAction = actionIdle;
+  group.character = character;
+  group.animTimer = Math.random() * 10;
 
   return group;
 }
@@ -239,11 +239,45 @@ function start2k26Game() {
   hoop1 = buildHoop(-13, true);
   hoop2 = buildHoop(13, false);
   
-  players = [...spawnTeam(p1Team, true), ...spawnTeam(p2Team, false)];
-  p1CtrlPlayer = players[p1Idx];
-  p2CtrlPlayer = is2P ? players[6 + p2Idx] : null;
+  const loader = new THREE.GLTFLoader();
+  loader.load(window.PLAYER_GLB_URI || 'assets/basketball_character_3d_model_for_games.glb', (gltf) => {
+    playerBaseModel = gltf.scene;
+    playerAnimations = gltf.animations || [];
+    
+    playerBaseModel.traverse((child) => {
+      if(child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
 
-  giveBall(p1CtrlPlayer);
+    loader.load(window.DRIBBLE_GLB_URI || 'assets/basketball_dribble_2.glb', (gltfDribble) => {
+      if(gltfDribble.animations && gltfDribble.animations.length > 0) {
+        playerDribbleAnim = gltfDribble.animations[0];
+      }
+      
+      loader.load(window.SHOOT_GLB_URI || 'assets/basketball_shot_2.glb', (gltfShoot) => {
+        if(gltfShoot.animations && gltfShoot.animations.length > 0) {
+          playerShootAnim = gltfShoot.animations[0];
+        }
+        finishStartGame();
+      }, undefined, () => finishStartGame());
+      
+    }, undefined, () => finishStartGame());
+
+    function finishStartGame() {
+      players = [...spawnTeam(p1Team, true), ...spawnTeam(p2Team, false)];
+      p1CtrlPlayer = players[p1Idx];
+      p2CtrlPlayer = is2P ? players[6 + p2Idx] : null;
+
+      giveBall(p1CtrlPlayer);
+    }
+  }, undefined, (err) => {
+    console.error('Error loading GLB:', err);
+    players = [...spawnTeam(p1Team, true), ...spawnTeam(p2Team, false)];
+    p1CtrlPlayer = players[p1Idx];
+    giveBall(p1CtrlPlayer);
+  });
 }
 
 function giveBall(p) {
@@ -448,33 +482,15 @@ function updateMovement(dt) {
 
     // Animation
     const speed = p.vel.length();
+    
+    // Face direction
     if(speed > 0.5) {
-      // Rotation: Face movement direction smoothly
       const targetAngle = Math.atan2(p.vel.x, p.vel.z);
-      // Smooth rotation shortest path
       let diff = targetAngle - p.rotation.y;
       while(diff < -Math.PI) diff += Math.PI*2;
       while(diff > Math.PI) diff -= Math.PI*2;
       p.rotation.y += diff * 10 * dt;
-      
-      // Running animation
-      p.animTimer += dt * speed * 3;
-      const sp = Math.sin(p.animTimer);
-      p.animParts.armL.rotation.x = sp;
-      p.animParts.armR.rotation.x = -sp;
-      p.animParts.legL.rotation.x = -sp;
-      p.animParts.legR.rotation.x = sp;
-      p.animParts.body.position.y = 1.2 + Math.abs(Math.sin(p.animTimer*2)) * 0.1;
     } else {
-      // Idle animation
-      p.animTimer += dt * 3;
-      p.animParts.armL.rotation.x = Math.sin(p.animTimer) * 0.05;
-      p.animParts.armR.rotation.x = -Math.sin(p.animTimer) * 0.05;
-      p.animParts.legL.rotation.x = 0;
-      p.animParts.legR.rotation.x = 0;
-      p.animParts.body.position.y = 1.2 + Math.sin(p.animTimer * 0.5) * 0.03;
-      
-      // Face hoop if on offense, or face ball if on defense
       if(ballHolder && p !== ballHolder) {
          const target = (p.isHome === ballHolder.isHome) ? (p.isHome ? hoop2 : hoop1).rim.position : ball.position;
          const targetAngle = Math.atan2(target.x - p.position.x, target.z - p.position.z);
@@ -484,16 +500,49 @@ function updateMovement(dt) {
          p.rotation.y += diff * 5 * dt;
       }
     }
-    
-    // Override arms for shooting
-    if(shotShooter === p || (ballHolder === p && p === p1CtrlPlayer && shotMeterActive)) {
-      p.animParts.armL.rotation.x = -Math.PI/2 - 0.5;
-      p.animParts.armR.rotation.x = -Math.PI/2 - 0.5;
-    }
-    // Override arm for dribbling
-    else if(ballHolder === p) {
-      // Hold ball with right hand
-      p.animParts.armR.rotation.x = -Math.PI/4 + Math.sin(t*15)*0.3;
+
+    if(p.mixer) {
+      let targetAction = p.actionIdle;
+      const isShootingAnim = (shotShooter === p) || (ballHolder === p && p === p1CtrlPlayer && shotMeterActive);
+
+      if (isShootingAnim && p.actionShoot) {
+        targetAction = p.actionShoot;
+        targetAction.setEffectiveTimeScale(1.5); // Speed up shot animation slightly
+      } else if (ballHolder === p && p.actionDribble) {
+        targetAction = p.actionDribble;
+        targetAction.setEffectiveTimeScale(speed > 0.5 ? 1.5 : 1.0);
+      } else if (speed > 0.5 && p.actionRun) {
+        targetAction = p.actionRun;
+        targetAction.setEffectiveTimeScale(1.0);
+      } else if (p.actionIdle) {
+        targetAction = p.actionIdle;
+        targetAction.setEffectiveTimeScale(speed > 0.5 ? 2.0 : 1.0);
+      }
+
+      if (targetAction) {
+        if (p.currentAction !== targetAction) {
+          targetAction.reset();
+          targetAction.play();
+          p.currentAction = targetAction;
+        } else if (!targetAction.isRunning()) {
+          targetAction.play();
+        }
+      }
+
+      [p.actionIdle, p.actionRun, p.actionDribble, p.actionShoot].forEach(act => {
+        if(act && act !== targetAction) act.stop();
+      });
+    } else {
+      // Fallback manual code bobbing for the entire mesh
+      if(speed > 0.5) {
+        p.animTimer += dt * speed * 3;
+        p.character.position.y = Math.abs(Math.sin(p.animTimer*2)) * 0.1;
+        p.character.rotation.z = Math.sin(p.animTimer) * 0.1;
+      } else {
+        p.animTimer += dt * 3;
+        p.character.position.y = Math.sin(p.animTimer * 0.5) * 0.03;
+        p.character.rotation.z = 0;
+      }
     }
   });
 }
@@ -515,6 +564,8 @@ function animate() {
   dt = clock.getDelta();
   if(dt > 0.1) dt = 0.1;
   t += dt;
+  
+  mixers.forEach(m => m.update(dt));
 
   // Timers
   if(timeClock > 0) timeClock -= dt;
