@@ -694,15 +694,16 @@ function drawPlayerSprite(ctx, player, x, y, charH) {
   const legSwing = moving ? Math.sin(player.animTimer * 8) * s * 7   : 0;
 
   // Proportions relative to charH
-  const headR = charH * 0.155;
+  const headR  = charH * 0.15;
   const torsoH = charH * 0.28;
-  const torsoW = charH * 0.22;
+  const torsoW = charH * 0.30;
   const shortsH = charH * 0.10;
   const legH   = charH * 0.37;
-  // Layout: feet at y, legs go up, then shorts, torso, neck, head
-  const torsoTop  = y - legH - shortsH + bob;
-  const shortsTop = y - legH + bob;
-  const headCY    = torsoTop - headR + s * 1.5;
+  // Layout from feet (y) upward: legs → shorts → torso → head
+  const legTopY   = y   - legH + bob;           // top of legs = bottom of shorts
+  const shortsTop = legTopY - shortsH;           // top of shorts = bottom of torso
+  const torsoTop  = shortsTop - torsoH;          // top of torso = bottom of neck
+  const headCY    = torsoTop - headR + s * 1.5; // head centre just above torso
 
   // Shadow
   ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = '#000';
