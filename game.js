@@ -700,7 +700,7 @@ function drawPlayerSprite(ctx, player, x, y, scale) {
   ctx.restore();
 
   const torsoY = by - legH + bob;
-  const headY  = torsoY - bH - headR + 2 * scale;
+  const headY  = torsoY - headR + 2 * scale;
 
   // Legs
   ctx.lineWidth = 8 * scale; ctx.lineCap = 'round';
