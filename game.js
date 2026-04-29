@@ -183,13 +183,13 @@ function buildCourt() {
     const riseZ = 2.5 + row * rowD, riseX = 2.5 + row * rowD;
     // End stands (behind each hoop)
     for (const sg of [-1, 1]) {
-      scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(W+12+row*2, rowH, rowD), cm),
-        {position: new THREE.Vector3(0, yPos, sg*(L/2 + riseZ))}));
+      const es = new THREE.Mesh(new THREE.BoxGeometry(W+12+row*2, rowH, rowD), cm);
+      es.position.set(0, yPos, sg*(L/2 + riseZ)); scene.add(es);
     }
     // Side stands
     for (const sg of [-1, 1]) {
-      scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(rowD, rowH, L+8+row*2), cm),
-        {position: new THREE.Vector3(sg*(W/2 + riseX), yPos, 0)}));
+      const ss = new THREE.Mesh(new THREE.BoxGeometry(rowD, rowH, L+8+row*2), cm);
+      ss.position.set(sg*(W/2 + riseX), yPos, 0); scene.add(ss);
     }
   }
 
@@ -913,7 +913,7 @@ function buildAnimalFeatures3D(group, type, hy, r, h, animalMat) {
         put(new THREE.CylinderGeometry(r*.07,r*.10,r*.6,6), gold, s*r*.35, hy+r*1.1, 0);
       // Long distinctive neck — extends well below the head down into the torso
       const neckLen = h * 0.38;
-      const neckMid = hy - headR - neckLen * 0.5;
+      const neckMid = hy - r - neckLen * 0.5;
       put(new THREE.CylinderGeometry(r*.55, r*.72, neckLen, 10), animalMat, 0, neckMid, 0);
       // Giraffe spot patches (dark blobs on neck)
       const spotMat = new THREE.MeshLambertMaterial({ color: 0x8b5e1a });
@@ -994,7 +994,7 @@ function buildAnimalFeatures3D(group, type, hy, r, h, animalMat) {
       for (const s of [-1,1])
         put(new THREE.SphereGeometry(r*.09,5,5), dark, s*r*.16, hy-r*.58, r*1.02);
       // Hump — sits on the back of the torso (behind the body, negative z)
-      const humpY = hy - headR - h*0.26;
+      const humpY = hy - r - h*0.26;
       const hump = put(new THREE.SphereGeometry(r*1.15, 9, 7), animalMat, 0, humpY, -r*0.9);
       hump.scale.set(0.8, 0.72, 0.75);
       break;
