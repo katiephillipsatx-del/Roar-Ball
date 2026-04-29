@@ -1,3 +1,4 @@
+console.log('%c ROARBALL v2 — 2D sprites, no GLB ', 'background:#1aaa1a;color:white;font-size:14px');
 // ===== CONSTANTS =====
 const CONSTANTS = {
   COURT_W: 15.24, COURT_L: 28.65,
