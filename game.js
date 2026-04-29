@@ -664,113 +664,116 @@ function drawCharacters2D() {
   );
 
   sorted.forEach(p => {
-    const ndc = p.position.clone().project(camera);
-    if (ndc.z > 1) return;
-    const sx = (ndc.x * 0.5 + 0.5) * charCanvas.width;
-    const sy = (-ndc.y * 0.5 + 0.5) * charCanvas.height;
-    const dist = camera.position.distanceTo(p.position);
-    const scale = Math.max(0.35, Math.min(2.0, 11 / dist));
-    drawPlayerSprite(ctx, p, sx, sy, scale);
+    const feetNDC = p.position.clone().project(camera);
+    if (feetNDC.z > 1) return;
+    // Screen position of feet (y=0 ground)
+    const footX = (feetNDC.x * 0.5 + 0.5) * charCanvas.width;
+    const footY = (-feetNDC.y * 0.5 + 0.5) * charCanvas.height;
+    // Screen position of top of head using actual player height
+    const heightM = parseHeight(p.pd.ht) * 0.0254; // inches → metres
+    const topPos = p.position.clone(); topPos.y = heightM;
+    const topNDC = topPos.clone().project(camera);
+    const topY = (-topNDC.y * 0.5 + 0.5) * charCanvas.height;
+    const charH = Math.max(18, footY - topY);
+    drawPlayerSprite(ctx, p, footX, footY, charH);
   });
 }
 
-function drawPlayerSprite(ctx, player, x, y, scale) {
+function drawPlayerSprite(ctx, player, x, y, charH) {
+  // charH = total pixel height of character at current perspective
   const pd = player.pd;
   const tc = '#' + player.teamCol.toString(16).padStart(6, '0');
   const ac = '#' + (pd.animalColor || 0xaa8855).toString(16).padStart(6, '0');
-  const sc = '#' + (pd.skinColor || 0xf0c080).toString(16).padStart(6, '0');
+  const sk = '#' + (pd.skinColor || 0xf0c080).toString(16).padStart(6, '0');
+  const s  = charH / 55; // line-width scale
 
   const spd = player.vel.length();
   const moving = spd > 0.5;
   player.animTimer += 0.016 * (moving ? spd * 3.5 : 2.5);
-  const bob = moving ? Math.sin(player.animTimer * 8) * 3 * scale : Math.sin(player.animTimer * 2) * scale;
-  const legSwing = moving ? Math.sin(player.animTimer * 8) * 10 * scale : 0;
+  const bob      = moving ? Math.sin(player.animTimer * 8) * s * 1.8 : Math.sin(player.animTimer * 2) * s * 0.6;
+  const legSwing = moving ? Math.sin(player.animTimer * 8) * s * 7   : 0;
 
-  const bW = 18 * scale, bH = 22 * scale;
-  const legH = 20 * scale, headR = 11 * scale;
-  const cx = x, by = y; // bottom of character at y
+  // Proportions relative to charH
+  const headR = charH * 0.155;
+  const torsoH = charH * 0.28;
+  const torsoW = charH * 0.22;
+  const shortsH = charH * 0.10;
+  const legH   = charH * 0.37;
+  // Layout: feet at y, legs go up, then shorts, torso, neck, head
+  const torsoTop  = y - legH - shortsH + bob;
+  const shortsTop = y - legH + bob;
+  const headCY    = torsoTop - headR + s * 1.5;
 
   // Shadow
-  ctx.save();
-  ctx.globalAlpha = 0.2;
-  ctx.fillStyle = '#000';
-  ctx.beginPath();
-  ctx.ellipse(cx, by, bW * 0.9, 4 * scale, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.ellipse(x, y, torsoW * 0.9, 3 * s, 0, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 
-  const torsoY = by - legH + bob;
-  const headY  = torsoY - headR + 2 * scale;
-
-  // Legs
-  ctx.lineWidth = 8 * scale; ctx.lineCap = 'round';
-  ctx.strokeStyle = sc;
-  ctx.beginPath(); ctx.moveTo(cx - bW * 0.3, torsoY + bH * 0.9); ctx.lineTo(cx - bW * 0.3 - legSwing * 0.4, by); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx + bW * 0.3, torsoY + bH * 0.9); ctx.lineTo(cx + bW * 0.3 + legSwing * 0.4, by); ctx.stroke();
+  // Legs (skin coloured)
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 6 * s; ctx.strokeStyle = sk;
+  ctx.beginPath(); ctx.moveTo(x - torsoW * 0.28, shortsTop + shortsH); ctx.lineTo(x - torsoW * 0.28 - legSwing * 0.35, y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + torsoW * 0.28, shortsTop + shortsH); ctx.lineTo(x + torsoW * 0.28 + legSwing * 0.35, y); ctx.stroke();
   // Shoes
-  ctx.strokeStyle = '#111'; ctx.lineWidth = 6 * scale;
-  ctx.beginPath(); ctx.moveTo(cx - bW * 0.3 - legSwing * 0.4, by); ctx.lineTo(cx - bW * 0.3 - legSwing * 0.4 - 5 * scale, by + 3 * scale); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx + bW * 0.3 + legSwing * 0.4, by); ctx.lineTo(cx + bW * 0.3 + legSwing * 0.4 + 5 * scale, by + 3 * scale); ctx.stroke();
+  ctx.lineWidth = 5 * s; ctx.strokeStyle = '#111111';
+  ctx.beginPath(); ctx.moveTo(x - torsoW * 0.28 - legSwing * 0.35, y); ctx.lineTo(x - torsoW * 0.28 - legSwing * 0.35 - 4 * s, y + 2 * s); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + torsoW * 0.28 + legSwing * 0.35, y); ctx.lineTo(x + torsoW * 0.28 + legSwing * 0.35 + 4 * s, y + 2 * s); ctx.stroke();
 
-  // Jersey body
-  ctx.fillStyle = tc;
-  ctx.beginPath();
-  ctx.roundRect(cx - bW * 0.6, torsoY, bW * 1.2, bH, 4 * scale);
-  ctx.fill();
   // Shorts
-  ctx.globalAlpha = 0.85;
   ctx.fillStyle = tc;
-  ctx.beginPath();
-  ctx.roundRect(cx - bW * 0.55, torsoY + bH * 0.72, bW * 1.1, bH * 0.32, 3 * scale);
-  ctx.fill();
-  ctx.globalAlpha = 1;
+  ctx.beginPath(); ctx.roundRect(x - torsoW * 0.55, shortsTop, torsoW * 1.1, shortsH, 2 * s); ctx.fill();
+
+  // Jersey
+  ctx.fillStyle = tc;
+  ctx.beginPath(); ctx.roundRect(x - torsoW * 0.6, torsoTop, torsoW * 1.2, torsoH, 3 * s); ctx.fill();
 
   // Jersey number
   ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  ctx.font = `bold ${10 * scale}px Arial`;
+  ctx.font = `bold ${Math.max(7, 7 * s)}px Arial`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(String(pd.num), cx, torsoY + bH * 0.38);
+  ctx.fillText(String(pd.num), x, torsoTop + torsoH * 0.42);
 
-  // Arms
-  ctx.lineWidth = 7 * scale; ctx.strokeStyle = sc;
-  ctx.beginPath(); ctx.moveTo(cx - bW * 0.6, torsoY + bH * 0.2); ctx.lineTo(cx - bW * 1.1, torsoY + bH * 0.65 + legSwing * 0.2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx + bW * 0.6, torsoY + bH * 0.2); ctx.lineTo(cx + bW * 1.1, torsoY + bH * 0.65 - legSwing * 0.2); ctx.stroke();
+  // Arms (swing opposite to legs)
+  ctx.lineWidth = 5 * s; ctx.strokeStyle = sk;
+  ctx.beginPath(); ctx.moveTo(x - torsoW * 0.6, torsoTop + torsoH * 0.18); ctx.lineTo(x - torsoW * 1.05, torsoTop + torsoH * 0.62 + legSwing * 0.2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + torsoW * 0.6, torsoTop + torsoH * 0.18); ctx.lineTo(x + torsoW * 1.05, torsoTop + torsoH * 0.62 - legSwing * 0.2); ctx.stroke();
 
   // Neck
-  ctx.fillStyle = sc;
-  ctx.beginPath(); ctx.ellipse(cx, torsoY + 3 * scale, 4 * scale, 5 * scale, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = sk;
+  ctx.beginPath(); ctx.ellipse(x, torsoTop + s, 2.5 * s, 3.5 * s, 0, 0, Math.PI * 2); ctx.fill();
 
   // Animal head
-  drawAnimalHead2D(ctx, pd.type, cx, headY, headR, ac, scale);
+  drawAnimalHead2D(ctx, pd.type, x, headCY, headR, ac, s);
 
-  // Ball
+  // Ball held indicator
   if (player === ballHolder) {
-    const bx = cx + bW * 0.9, ballY = torsoY + bH * 0.3;
+    const ballR = charH * 0.11;
+    const bx = x + torsoW * 0.95, ballY = torsoTop + torsoH * 0.35;
     ctx.fillStyle = '#ff6600';
-    ctx.beginPath(); ctx.arc(bx, ballY, 7 * scale, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#331100'; ctx.lineWidth = 1.5 * scale; ctx.stroke();
-    ctx.strokeStyle = '#331100'; ctx.lineWidth = 1 * scale;
-    ctx.beginPath(); ctx.moveTo(bx - 7*scale, ballY); ctx.lineTo(bx + 7*scale, ballY); ctx.stroke();
-    ctx.beginPath(); ctx.arc(bx, ballY, 7*scale, 0, Math.PI, false); ctx.stroke();
+    ctx.beginPath(); ctx.arc(bx, ballY, ballR, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#331100'; ctx.lineWidth = 1.5 * s; ctx.stroke();
+    ctx.lineWidth = s;
+    ctx.beginPath(); ctx.moveTo(bx - ballR, ballY); ctx.lineTo(bx + ballR, ballY); ctx.stroke();
+    ctx.beginPath(); ctx.arc(bx, ballY, ballR, 0, Math.PI, false); ctx.stroke();
   }
 
-  // Controlled player ring
+  // Controlled player indicator
   if (player === p1CtrlPlayer) {
-    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2.5 * scale;
-    ctx.setLineDash([4 * scale, 3 * scale]);
-    ctx.beginPath(); ctx.ellipse(cx, by + 1, bW * 0.7, 5 * scale, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2 * s;
+    ctx.setLineDash([3 * s, 3 * s]);
+    ctx.beginPath(); ctx.ellipse(x, y + s, torsoW * 0.75, 3.5 * s, 0, 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
   }
 
   // Hot streak
   if (player.isHot) {
-    ctx.font = `${10 * scale}px Arial`;
+    ctx.font = `${Math.max(8, 8 * s)}px Arial`;
     ctx.textAlign = 'center';
-    ctx.fillText('🔥', cx, headY - headR * 1.8);
+    ctx.fillText('🔥', x, headCY - headR * 1.9);
   }
 }
 
-function drawAnimalHead2D(ctx, type, x, y, r, color, scale) {
+function drawAnimalHead2D(ctx, type, x, y, r, color, s) {
   ctx.fillStyle = color;
 
   // Head shape varies by animal
