@@ -11,9 +11,7 @@ let scene, camera, renderer, clock;
 let p1Team, p2Team, p1Idx, p2Idx, is2P;
 let mode = 'MENU';
 let players = [];
-let playerBaseModel = null, playerAnimations = [];
-let playerDribbleAnim = null, playerShootAnim = null;
-let mixers = [];
+let charCanvas, charCtx;
 let ball, ballVel = new THREE.Vector3(), ballHolder = null;
 let dt, t = 0;
 let qtr = 1, timeClock = 720, shotClock = 24.0;
@@ -85,10 +83,16 @@ function init3D() {
 
   buildCourt(); buildBall();
   clock = new THREE.Clock();
+  charCanvas = document.getElementById('char-canvas');
+  charCtx = charCanvas.getContext('2d');
+  charCanvas.width = window.innerWidth;
+  charCanvas.height = window.innerHeight;
   window.addEventListener('resize',()=>{
     camera.aspect=window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth,window.innerHeight);
+    charCanvas.width = window.innerWidth;
+    charCanvas.height = window.innerHeight;
   });
   animate();
 }
@@ -223,160 +227,16 @@ function buildBall() {
   });
 }
 
-// ===== ANIMAL HEADS =====
-function buildAnimalHead(type, col) {
-  const g=new THREE.Group();
-  const M=(c)=>new THREE.MeshStandardMaterial({color:c,roughness:.8});
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.22,12,10),M(col));
-  head.castShadow=true; g.add(head);
 
-  if(type==='Goat') {
-    const hm=M(0xddddcc);
-    for(const s of[-1,1]){const h=new THREE.Mesh(new THREE.CylinderGeometry(.02,.05,.22,6),hm);h.rotation.z=s*.7;h.position.set(s*.18,.2,-.05);g.add(h);}
-    const b=new THREE.Mesh(new THREE.CylinderGeometry(.03,.01,.15,6),M(0xeeeeee));b.position.set(0,-.28,.1);g.add(b);
-  } else if(['Panther','Jaguar','SnowLeopard','SandCat'].includes(type)) {
-    for(const s of[-1,1]){const e=new THREE.Mesh(new THREE.ConeGeometry(.07,.16,5),M(col));e.position.set(s*.18,.22,-.05);g.add(e);}
-    const sn=new THREE.Mesh(new THREE.SphereGeometry(.1,8,6),M(Math.max(0,col-0x222222)));sn.position.set(0,-.06,.18);sn.scale.set(1,.7,.7);g.add(sn);
-  } else if(type==='Lion') {
-    for(const s of[-1,1]){const e=new THREE.Mesh(new THREE.ConeGeometry(.07,.15,5),M(col));e.position.set(s*.18,.22,-.05);g.add(e);}
-    const mn=new THREE.Mesh(new THREE.TorusGeometry(.28,.08,6,14),M(0x884400));mn.position.set(0,-.05,0);g.add(mn);
-  } else if(type==='Giraffe') {
-    head.scale.set(.9,.8,.9);
-    for(const s of[-1,1]){const o=new THREE.Mesh(new THREE.CylinderGeometry(.02,.04,.18,5),M(0xcc8833));o.position.set(s*.1,.26,0);g.add(o);}
-  } else if(type==='Rhino') {
-    head.scale.set(1.2,.9,1.1);
-    const h=new THREE.Mesh(new THREE.ConeGeometry(.06,.35,6),M(0x999999));h.rotation.x=-.3;h.position.set(0,.1,.22);g.add(h);
-  } else if(type==='Horse') {
-    const sn=new THREE.Mesh(new THREE.BoxGeometry(.18,.16,.32),M(col));sn.position.set(0,-.08,.22);g.add(sn);
-    for(const s of[-1,1]){const e=new THREE.Mesh(new THREE.ConeGeometry(.05,.12,5),M(col));e.position.set(s*.14,.27,-.05);g.add(e);}
-    const mn=new THREE.Mesh(new THREE.BoxGeometry(.08,.3,.4),M(0x553300));mn.position.set(0,.1,-.12);g.add(mn);
-  } else if(type==='Bear'||type==='PolarBear') {
-    head.scale.set(1.25,1.1,1.1);
-    for(const s of[-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(.08,6,6),M(col));e.position.set(s*.24,.2,-.1);g.add(e);}
-    const sn=new THREE.Mesh(new THREE.SphereGeometry(.12,8,6),M(Math.min(0xffffff,col+0x222222)));sn.position.set(0,-.08,.2);sn.scale.set(1,.8,.7);g.add(sn);
-  } else if(type==='Gorilla') {
-    head.scale.set(1.3,1.1,1.2);
-    const br=new THREE.Mesh(new THREE.BoxGeometry(.5,.07,.12),M(col));br.position.set(0,.12,.17);g.add(br);
-    const fp=new THREE.Mesh(new THREE.BoxGeometry(.3,.28,.08),M(Math.min(0xffffff,col+0x111111)));fp.position.set(0,-.05,.2);g.add(fp);
-  } else if(type==='Alligator') {
-    head.scale.set(.9,.7,1.0);
-    const sn=new THREE.Mesh(new THREE.BoxGeometry(.22,.1,.5),M(col));sn.position.set(0,-.05,.3);g.add(sn);
-    for(let i=-2;i<=2;i++){const t=new THREE.Mesh(new THREE.ConeGeometry(.02,.07,4),M(0xffffff));t.position.set(i*.04,-.1,.42);g.add(t);}
-  } else if(type==='Ostrich') {
-    head.scale.set(.8,.8,.8);
-    const bk=new THREE.Mesh(new THREE.ConeGeometry(.04,.18,5),M(0xffaa00));bk.rotation.x=Math.PI/2;bk.position.set(0,-.02,.22);g.add(bk);
-  } else if(type==='Moose') {
-    head.scale.set(1.1,1.0,1.2);
-    for(const s of[-1,1]) {
-      const ab=new THREE.Mesh(new THREE.CylinderGeometry(.025,.04,.3,5),M(0x885533));ab.position.set(s*.2,.3,0);ab.rotation.z=s*.3;g.add(ab);
-      for(let ti=0;ti<3;ti++){const tn=new THREE.Mesh(new THREE.CylinderGeometry(.015,.025,.15,4),M(0x885533));tn.position.set(s*(.2+ti*.06),.4,(ti-1)*.07);tn.rotation.z=s*.8;g.add(tn);}
-    }
-  } else if(type==='Walrus') {
-    head.scale.set(1.3,1.1,1.15);
-    for(const s of[-1,1]){const t=new THREE.Mesh(new THREE.CylinderGeometry(.02,.035,.3,5),M(0xfffff0));t.rotation.z=s*.15;t.position.set(s*.1,-.22,.15);g.add(t);}
-    const m=new THREE.Mesh(new THREE.SphereGeometry(.15,8,6),M(Math.min(0xffffff,col+0x111111)));m.position.set(0,-.1,.2);m.scale.set(1.2,.7,.6);g.add(m);
-  } else if(['ArcticWolf','Meerkat','FennecFox'].includes(type)) {
-    const sn=new THREE.Mesh(new THREE.ConeGeometry(.07,.22,5),M(col));sn.rotation.x=Math.PI/2;sn.position.set(0,-.06,.24);g.add(sn);
-    const eh=type==='FennecFox'?.28:.18;
-    for(const s of[-1,1]){const e=new THREE.Mesh(new THREE.ConeGeometry(.06,eh,5),M(col));e.position.set(s*.16,.28,-.04);g.add(e);}
-  } else if(type==='Sabertooth') {
-    for(const s of[-1,1]) {
-      const e=new THREE.Mesh(new THREE.ConeGeometry(.07,.15,5),M(col));e.position.set(s*.18,.22,-.05);g.add(e);
-      const f=new THREE.Mesh(new THREE.ConeGeometry(.025,.2,5),M(0xfffff0));f.position.set(s*.08,-.18,.14);g.add(f);
-    }
-  } else if(type==='Bull') {
-    head.scale.set(1.2,1.0,1.1);
-    for(const s of[-1,1]){const h=new THREE.Mesh(new THREE.CylinderGeometry(.015,.04,.28,6),M(0xddccaa));h.rotation.z=s*1.2;h.position.set(s*.22,.15,0);g.add(h);}
-    const nr=new THREE.Mesh(new THREE.TorusGeometry(.06,.015,6,12),M(0xdddddd));nr.position.set(0,-.14,.2);nr.rotation.x=Math.PI/2;g.add(nr);
-  } else if(type==='Komodo'||type==='Lizard') {
-    head.scale.set(.9,.65,1.1);
-    const sn=new THREE.Mesh(new THREE.BoxGeometry(.16,.08,.35),M(col));sn.position.set(0,-.05,.28);g.add(sn);
-    const tg=new THREE.Mesh(new THREE.BoxGeometry(.04,.015,.16),M(0xff2200));tg.position.set(0,-.1,.44);g.add(tg);
-  } else if(type==='BlackMamba'||type==='Sidewinder') {
-    g.remove(head);
-    const sh=new THREE.Mesh(new THREE.ConeGeometry(.2,.3,4),M(col));sh.rotation.x=Math.PI/2;sh.scale.set(1,.45,1);sh.position.set(0,0,.1);g.add(sh);
-  } else if(type==='Camel') {
-    head.scale.set(.9,.85,1.1);
-    const ns=new THREE.Mesh(new THREE.BoxGeometry(.16,.18,.28),M(col));ns.position.set(0,-.1,.24);g.add(ns);
-  } else if(type==='Scorpion') {
-    head.scale.set(1.1,.8,.9);
-    for(const s of[-1,1]){const p=new THREE.Mesh(new THREE.BoxGeometry(.1,.08,.18),M(0x443311));p.position.set(s*.22,-.05,.2);g.add(p);}
-  } else {
-    for(const s of[-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(.07,6,6),M(col));e.position.set(s*.2,.18,-.05);g.add(e);}
-  }
-  return g;
-}
-
-// ===== MAKE PLAYER MESH =====
+// ===== MAKE PLAYER (position tracker + ground ring only — character drawn on 2D canvas) =====
 function makePlayerMesh(pd, teamColor, isHome) {
   const group = new THREE.Group();
-  const scale = (parseHeight(pd.ht) / 78) * 1.1;
-  group.scale.setScalar(scale);
-
-  let character = new THREE.Group();
-  let mixer=null, actionIdle=null, actionRun=null, actionDribble=null, actionShoot=null;
-
-  if (playerBaseModel) {
-    character = typeof THREE.SkeletonUtils!=='undefined'
-      ? THREE.SkeletonUtils.clone(playerBaseModel)
-      : playerBaseModel.clone();
-    character.traverse(child => {
-      if (child.isMesh && child.material) {
-        const ms = Array.isArray(child.material)?child.material:[child.material];
-        ms.forEach(m=>{if(m.color)m.color.setHex(teamColor);m.roughness=.75;});
-      }
-    });
-    if (playerAnimations && playerAnimations.length > 0) {
-      mixer = new THREE.AnimationMixer(character); mixers.push(mixer);
-      actionIdle = mixer.clipAction(playerAnimations[0]); actionIdle.play();
-      if (playerAnimations.length > 1) actionRun = mixer.clipAction(playerAnimations[1]);
-    } else if (playerDribbleAnim || playerShootAnim) {
-      mixer = new THREE.AnimationMixer(character); mixers.push(mixer);
-    }
-    if (mixer && playerDribbleAnim) actionDribble = mixer.clipAction(playerDribbleAnim);
-    if (mixer && playerShootAnim) {
-      actionShoot = mixer.clipAction(playerShootAnim);
-      actionShoot.setLoop(THREE.LoopOnce,1); actionShoot.clampWhenFinished=true;
-    }
-  } else {
-    // Procedural fallback body
-    const bm=new THREE.MeshStandardMaterial({color:teamColor,roughness:.7});
-    const sm=new THREE.MeshStandardMaterial({color:pd.skinColor||0xf0c080,roughness:.8});
-    const torso=new THREE.Mesh(new THREE.BoxGeometry(.55,.85,.28),bm);torso.position.y=1.15;character.add(torso);
-    const shorts=new THREE.Mesh(new THREE.BoxGeometry(.52,.3,.26),bm);shorts.position.y=.72;character.add(shorts);
-    for(const s of[-1,1]) {
-      const leg=new THREE.Mesh(new THREE.BoxGeometry(.22,.72,.22),sm);leg.position.set(s*.15,.36,0);character.add(leg);
-      const arm=new THREE.Mesh(new THREE.BoxGeometry(.16,.62,.16),sm);arm.position.set(s*.38,1.1,0);character.add(arm);
-      const shoe=new THREE.Mesh(new THREE.BoxGeometry(.24,.12,.32),new THREE.MeshStandardMaterial({color:0x111111}));shoe.position.set(s*.15,.07,.04);character.add(shoe);
-    }
-    const neck=new THREE.Mesh(new THREE.CylinderGeometry(.09,.1,.2,8),sm);neck.position.y=1.65;character.add(neck);
-  }
-  group.add(character);
-
-  // Animal head
-  const head = buildAnimalHead(pd.type, pd.animalColor||0xaa8855);
-  head.position.y = 1.85; head.castShadow=true; character.add(head);
-
-  // Jersey number canvas texture
-  const nc=document.createElement('canvas'); nc.width=64; nc.height=64;
-  const nx=nc.getContext('2d');
-  nx.fillStyle='#'+teamColor.toString(16).padStart(6,'0'); nx.fillRect(0,0,64,64);
-  nx.fillStyle='white'; nx.font='bold 34px Arial'; nx.textAlign='center'; nx.textBaseline='middle';
-  nx.fillText(String(pd.num),32,34);
-  const numPlate=new THREE.Mesh(new THREE.PlaneGeometry(.32,.32),
-    new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(nc),transparent:true}));
-  numPlate.position.set(0,1.15,.15); character.add(numPlate);
-
-  // Ground ring
   const ring=new THREE.Mesh(new THREE.RingGeometry(.55,.65,16),
     new THREE.MeshBasicMaterial({color:teamColor,side:THREE.DoubleSide,transparent:true,opacity:.7}));
   ring.rotation.x=-Math.PI/2; ring.position.y=.02; group.add(ring);
-
   group.pd=pd; group.teamCol=teamColor; group.isHome=isHome; group.bench=false;
   group.vel=new THREE.Vector3(); group.posTarget=new THREE.Vector3();
-  group.mixer=mixer; group.actionIdle=actionIdle; group.actionRun=actionRun;
-  group.actionDribble=actionDribble; group.actionShoot=actionShoot;
-  group.currentAction=actionIdle; group.character=character; group.animTimer=Math.random()*10;
+  group.animTimer=Math.random()*10;
   group.ring=ring; group.ringMat=ring.material;
   group.stamina=100; group.shotsMade=0; group.shotsAttempted=0; group.isHot=false; group.hotStreak=0;
   return group;
@@ -400,24 +260,9 @@ function start2k26Game() {
   hoop1=buildHoop(-CONSTANTS.COURT_L/2, true);
   hoop2=buildHoop( CONSTANTS.COURT_L/2, false);
 
-  const loader=new THREE.GLTFLoader();
-  loader.load(window.PLAYER_GLB_URI||'assets/basketball_character_3d_model_for_games.glb', gltf=>{
-    playerBaseModel=gltf.scene; playerAnimations=gltf.animations||[];
-    playerBaseModel.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}});
-    loader.load(window.DRIBBLE_GLB_URI||'assets/basketball_dribble_2.glb', gd=>{
-      if(gd.animations&&gd.animations.length) playerDribbleAnim=gd.animations[0];
-      loader.load(window.SHOOT_GLB_URI||'assets/basketball_shot_2.glb', gs=>{
-        if(gs.animations&&gs.animations.length) playerShootAnim=gs.animations[0];
-        finishStart();
-      },undefined,()=>finishStart());
-    },undefined,()=>finishStart());
-  },undefined,err=>{console.warn('GLB fallback',err);finishStart();});
-
-  function finishStart() {
-    players=[...spawnTeam(p1Team,true),...spawnTeam(p2Team,false)];
-    p1CtrlPlayer=players[p1Idx]; p2CtrlPlayer=is2P?players[6+p2Idx]:null;
-    updateHUDTeamInfo(); giveBall(p1CtrlPlayer);
-  }
+  players=[...spawnTeam(p1Team,true),...spawnTeam(p2Team,false)];
+  p1CtrlPlayer=players[p1Idx]; p2CtrlPlayer=is2P?players[6+p2Idx]:null;
+  updateHUDTeamInfo(); giveBall(p1CtrlPlayer);
 }
 
 function updateHUDTeamInfo() {
@@ -653,21 +498,7 @@ function updateMovement(dt) {
       while(diff<-Math.PI)diff+=Math.PI*2;while(diff>Math.PI)diff-=Math.PI*2;
       p.rotation.y+=diff*4*dt;
     }
-    // Anim
-    if(p.mixer){
-      const isShoot=(shotShooter===p)||(ballHolder===p&&p===p1CtrlPlayer&&shotMeterActive);
-      let tgt=p.actionIdle;
-      if(isShoot&&p.actionShoot){tgt=p.actionShoot;tgt.setEffectiveTimeScale(1.4);}
-      else if(ballHolder===p&&p.actionDribble){tgt=p.actionDribble;tgt.setEffectiveTimeScale(spd>.5?1.5:1);}
-      else if(spd>.4&&p.actionRun){tgt=p.actionRun;tgt.setEffectiveTimeScale(Math.min(spd/3,2));}
-      if(tgt&&p.currentAction!==tgt){tgt.reset().play();if(p.currentAction)p.currentAction.crossFadeTo(tgt,.15,true);p.currentAction=tgt;}
-      else if(tgt&&!tgt.isRunning())tgt.play();
-      [p.actionIdle,p.actionRun,p.actionDribble,p.actionShoot].forEach(a=>{if(a&&a!==tgt)a.stop();});
-    } else {
-      p.animTimer+=dt*(spd>.4?spd*3.5:2.5);
-      p.character.position.y=spd>.4?Math.abs(Math.sin(p.animTimer*2.2))*.12:Math.sin(p.animTimer*.6)*.025;
-      p.character.rotation.z=spd>.4?Math.sin(p.animTimer)*.09:0;
-    }
+    p.animTimer+=dt*(spd>.4?spd*3.5:2.5);
   });
 }
 
@@ -750,7 +581,6 @@ function animate() {
   requestAnimationFrame(animate);
   if(mode!=='GAME'||gamePhase==='QUARTER_BREAK') return;
   dt=clock.getDelta(); if(dt>.1)dt=.1; t+=dt;
-  mixers.forEach(m=>m.update(dt));
   if(gamePhase==='PLAYING'){
     timeClock-=dt;
     if(timeClock<=0){timeClock=0;triggerQuarterEnd();return;}
@@ -773,6 +603,7 @@ function animate() {
   updateMomentum();
   runAI(dt); updateMovement(dt); updatePhysics(dt); updateCamera(dt);
   renderer.render(scene,camera);
+  drawCharacters2D();
 }
 
 // ===== INPUT =====
@@ -819,4 +650,266 @@ function renderSubPanel(){
       cd.appendChild(btn);
     });
   });
+}
+
+// ===== 2D CHARACTER RENDERING =====
+function drawCharacters2D() {
+  if (!charCanvas || !players.length) return;
+  const ctx = charCtx;
+  ctx.clearRect(0, 0, charCanvas.width, charCanvas.height);
+
+  const sorted = [...players].filter(p => !p.bench).sort((a,b) =>
+    camera.position.distanceTo(b.position) - camera.position.distanceTo(a.position)
+  );
+
+  sorted.forEach(p => {
+    const ndc = p.position.clone().project(camera);
+    if (ndc.z > 1) return;
+    const sx = (ndc.x * 0.5 + 0.5) * charCanvas.width;
+    const sy = (-ndc.y * 0.5 + 0.5) * charCanvas.height;
+    const dist = camera.position.distanceTo(p.position);
+    const scale = Math.max(0.35, Math.min(2.0, 11 / dist));
+    drawPlayerSprite(ctx, p, sx, sy, scale);
+  });
+}
+
+function drawPlayerSprite(ctx, player, x, y, scale) {
+  const pd = player.pd;
+  const tc = '#' + player.teamCol.toString(16).padStart(6, '0');
+  const ac = '#' + (pd.animalColor || 0xaa8855).toString(16).padStart(6, '0');
+  const sc = '#' + (pd.skinColor || 0xf0c080).toString(16).padStart(6, '0');
+
+  const spd = player.vel.length();
+  const moving = spd > 0.5;
+  player.animTimer += 0.016 * (moving ? spd * 3.5 : 2.5);
+  const bob = moving ? Math.sin(player.animTimer * 8) * 3 * scale : Math.sin(player.animTimer * 2) * scale;
+  const legSwing = moving ? Math.sin(player.animTimer * 8) * 10 * scale : 0;
+
+  const bW = 18 * scale, bH = 22 * scale;
+  const legH = 20 * scale, headR = 11 * scale;
+  const cx = x, by = y; // bottom of character at y
+
+  // Shadow
+  ctx.save();
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(cx, by, bW * 0.9, 4 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  const torsoY = by - legH + bob;
+  const headY  = torsoY - bH - headR + 2 * scale;
+
+  // Legs
+  ctx.lineWidth = 8 * scale; ctx.lineCap = 'round';
+  ctx.strokeStyle = sc;
+  ctx.beginPath(); ctx.moveTo(cx - bW * 0.3, torsoY + bH * 0.9); ctx.lineTo(cx - bW * 0.3 - legSwing * 0.4, by); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx + bW * 0.3, torsoY + bH * 0.9); ctx.lineTo(cx + bW * 0.3 + legSwing * 0.4, by); ctx.stroke();
+  // Shoes
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 6 * scale;
+  ctx.beginPath(); ctx.moveTo(cx - bW * 0.3 - legSwing * 0.4, by); ctx.lineTo(cx - bW * 0.3 - legSwing * 0.4 - 5 * scale, by + 3 * scale); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx + bW * 0.3 + legSwing * 0.4, by); ctx.lineTo(cx + bW * 0.3 + legSwing * 0.4 + 5 * scale, by + 3 * scale); ctx.stroke();
+
+  // Jersey body
+  ctx.fillStyle = tc;
+  ctx.beginPath();
+  ctx.roundRect(cx - bW * 0.6, torsoY, bW * 1.2, bH, 4 * scale);
+  ctx.fill();
+  // Shorts
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = tc;
+  ctx.beginPath();
+  ctx.roundRect(cx - bW * 0.55, torsoY + bH * 0.72, bW * 1.1, bH * 0.32, 3 * scale);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Jersey number
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.font = `bold ${10 * scale}px Arial`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(String(pd.num), cx, torsoY + bH * 0.38);
+
+  // Arms
+  ctx.lineWidth = 7 * scale; ctx.strokeStyle = sc;
+  ctx.beginPath(); ctx.moveTo(cx - bW * 0.6, torsoY + bH * 0.2); ctx.lineTo(cx - bW * 1.1, torsoY + bH * 0.65 + legSwing * 0.2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx + bW * 0.6, torsoY + bH * 0.2); ctx.lineTo(cx + bW * 1.1, torsoY + bH * 0.65 - legSwing * 0.2); ctx.stroke();
+
+  // Neck
+  ctx.fillStyle = sc;
+  ctx.beginPath(); ctx.ellipse(cx, torsoY + 3 * scale, 4 * scale, 5 * scale, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Animal head
+  drawAnimalHead2D(ctx, pd.type, cx, headY, headR, ac, scale);
+
+  // Ball
+  if (player === ballHolder) {
+    const bx = cx + bW * 0.9, ballY = torsoY + bH * 0.3;
+    ctx.fillStyle = '#ff6600';
+    ctx.beginPath(); ctx.arc(bx, ballY, 7 * scale, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#331100'; ctx.lineWidth = 1.5 * scale; ctx.stroke();
+    ctx.strokeStyle = '#331100'; ctx.lineWidth = 1 * scale;
+    ctx.beginPath(); ctx.moveTo(bx - 7*scale, ballY); ctx.lineTo(bx + 7*scale, ballY); ctx.stroke();
+    ctx.beginPath(); ctx.arc(bx, ballY, 7*scale, 0, Math.PI, false); ctx.stroke();
+  }
+
+  // Controlled player ring
+  if (player === p1CtrlPlayer) {
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2.5 * scale;
+    ctx.setLineDash([4 * scale, 3 * scale]);
+    ctx.beginPath(); ctx.ellipse(cx, by + 1, bW * 0.7, 5 * scale, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Hot streak
+  if (player.isHot) {
+    ctx.font = `${10 * scale}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.fillText('🔥', cx, headY - headR * 1.8);
+  }
+}
+
+function drawAnimalHead2D(ctx, type, x, y, r, color, scale) {
+  ctx.fillStyle = color;
+
+  // Head shape varies by animal
+  if (['Gorilla','Bear','PolarBear','Rhino','Bull','Walrus'].includes(type)) {
+    ctx.beginPath(); ctx.arc(x, y, r * 1.2, 0, Math.PI * 2); ctx.fill();
+  } else if (['Giraffe','Horse','Camel'].includes(type)) {
+    ctx.beginPath(); ctx.ellipse(x, y, r * 0.85, r * 1.15, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (['Alligator','Komodo','Lizard'].includes(type)) {
+    ctx.beginPath(); ctx.ellipse(x, y, r * 1.1, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (['BlackMamba','Sidewinder'].includes(type)) {
+    ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.9, y); ctx.lineTo(x, y + r * 0.5); ctx.lineTo(x - r * 0.9, y); ctx.closePath(); ctx.fill();
+  } else if (type === 'Scorpion') {
+    ctx.beginPath(); ctx.moveTo(x, y-r); ctx.lineTo(x+r*0.9,y-r*0.5); ctx.lineTo(x+r*0.9,y+r*0.5); ctx.lineTo(x,y+r); ctx.lineTo(x-r*0.9,y+r*0.5); ctx.lineTo(x-r*0.9,y-r*0.5); ctx.closePath(); ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Animal-specific features
+  switch(type) {
+    case 'Goat':
+      ctx.strokeStyle='#ccccaa'; ctx.lineWidth=2.5*scale;
+      ctx.beginPath(); ctx.moveTo(x-r*.5,y-r*.7); ctx.bezierCurveTo(x-r*.9,y-r*1.6,x-r*.3,y-r*1.9,x-r*.1,y-r*1.4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+r*.5,y-r*.7); ctx.bezierCurveTo(x+r*.9,y-r*1.6,x+r*.3,y-r*1.9,x+r*.1,y-r*1.4); ctx.stroke();
+      ctx.fillStyle='#ddddcc'; ctx.beginPath(); ctx.ellipse(x,y+r*.9,r*.2,r*.35,0,0,Math.PI*2); ctx.fill();
+      break;
+    case 'Lion':
+      ctx.fillStyle='#884400';
+      for(let i=0;i<8;i++){const a=(i/8)*Math.PI*2;ctx.beginPath();ctx.ellipse(x+Math.cos(a)*r*1.25,y+Math.sin(a)*r*1.25,r*.35,r*.5,a,0,Math.PI*2);ctx.fill();}
+      ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x-r*.75,y-r*.75,r*.28,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+r*.75,y-r*.75,r*.28,0,Math.PI*2); ctx.fill();
+      break;
+    case 'Panther': case 'Jaguar': case 'SnowLeopard': case 'SandCat':
+      ctx.fillStyle=color;
+      ctx.beginPath(); ctx.moveTo(x-r*.6,y-r*.6); ctx.lineTo(x-r*.95,y-r*1.35); ctx.lineTo(x-r*.15,y-r*.8); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x+r*.6,y-r*.6); ctx.lineTo(x+r*.95,y-r*1.35); ctx.lineTo(x+r*.15,y-r*.8); ctx.fill();
+      ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.ellipse(x,y+r*.2,r*.45,r*.35,0,0,Math.PI*2); ctx.fill();
+      break;
+    case 'Rhino':
+      ctx.fillStyle='#aaaaaa'; ctx.beginPath(); ctx.moveTo(x-r*.18,y-r*.85); ctx.lineTo(x+r*.18,y-r*.85); ctx.lineTo(x,y-r*1.9); ctx.fill();
+      break;
+    case 'Bull':
+      ctx.strokeStyle='#ddccaa'; ctx.lineWidth=3.5*scale;
+      ctx.beginPath(); ctx.moveTo(x-r*.7,y-r*.3); ctx.quadraticCurveTo(x-r*1.6,y-r*.9,x-r*1.2,y-r*1.4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+r*.7,y-r*.3); ctx.quadraticCurveTo(x+r*1.6,y-r*.9,x+r*1.2,y-r*1.4); ctx.stroke();
+      ctx.strokeStyle='#cccccc'; ctx.lineWidth=2*scale; ctx.beginPath(); ctx.arc(x,y+r*.55,r*.2,0,Math.PI*2); ctx.stroke();
+      break;
+    case 'Horse':
+      ctx.fillStyle=color; ctx.beginPath(); ctx.ellipse(x,y+r*.65,r*.55,r*.55,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#553300'; ctx.beginPath(); ctx.ellipse(x,y-r*.5,r*.25,r*.75,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=color;
+      ctx.beginPath(); ctx.moveTo(x-r*.45,y-r*.8); ctx.lineTo(x-r*.65,y-r*1.45); ctx.lineTo(x-r*.1,y-r*.9); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x+r*.45,y-r*.8); ctx.lineTo(x+r*.65,y-r*1.45); ctx.lineTo(x+r*.1,y-r*.9); ctx.fill();
+      break;
+    case 'Bear': case 'PolarBear':
+      ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x-r*.9,y-r*.9,r*.35,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+r*.9,y-r*.9,r*.35,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.ellipse(x,y+r*.25,r*.5,r*.4,0,0,Math.PI*2); ctx.fill();
+      break;
+    case 'Gorilla':
+      ctx.fillStyle=color; ctx.beginPath(); ctx.rect(x-r*1.15,y-r*.55,r*2.3,r*.32); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.ellipse(x,y+r*.15,r*.65,r*.7,0,0,Math.PI*2); ctx.fill();
+      break;
+    case 'Giraffe':
+      ctx.fillStyle='#cc8833';
+      ctx.beginPath(); ctx.rect(x-r*.4,y-r*1.05,r*.18,r*.65); ctx.fill();
+      ctx.beginPath(); ctx.rect(x+r*.22,y-r*1.05,r*.18,r*.65); ctx.fill();
+      break;
+    case 'Alligator':
+      ctx.fillStyle=color; ctx.beginPath(); ctx.ellipse(x,y+r*.55,r*.95,r*.5,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='white';
+      for(let i=-2;i<=2;i++){ctx.beginPath();ctx.moveTo(x+i*r*.3,y+r*.3);ctx.lineTo(x+i*r*.3+r*.08,y+r*.75);ctx.lineTo(x+i*r*.3-r*.08,y+r*.75);ctx.fill();}
+      break;
+    case 'Ostrich':
+      ctx.fillStyle='#ffaa00'; ctx.beginPath(); ctx.moveTo(x-r*.2,y+r*.3); ctx.lineTo(x+r*.2,y+r*.3); ctx.lineTo(x,y+r*1.05); ctx.fill();
+      ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x-r*.7,y-r*.75,r*.28,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+r*.7,y-r*.75,r*.28,0,Math.PI*2); ctx.fill();
+      break;
+    case 'Moose':
+      ctx.strokeStyle='#885533'; ctx.lineWidth=3*scale;
+      ctx.beginPath(); ctx.moveTo(x-r*.4,y-r*.8); ctx.lineTo(x-r*.9,y-r*1.7); ctx.moveTo(x-r*.65,y-r*1.25); ctx.lineTo(x-r*1.2,y-r*1.5); ctx.moveTo(x-r*.75,y-r*1.55); ctx.lineTo(x-r*.4,y-r*1.75); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+r*.4,y-r*.8); ctx.lineTo(x+r*.9,y-r*1.7); ctx.moveTo(x+r*.65,y-r*1.25); ctx.lineTo(x+r*1.2,y-r*1.5); ctx.moveTo(x+r*.75,y-r*1.55); ctx.lineTo(x+r*.4,y-r*1.75); ctx.stroke();
+      break;
+    case 'Walrus':
+      ctx.fillStyle='#fffff0'; ctx.beginPath(); ctx.ellipse(x-r*.3,y+r*.85,r*.12,r*.48,-0.15,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x+r*.3,y+r*.85,r*.12,r*.48,0.15,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.ellipse(x,y+r*.25,r*.6,r*.38,0,0,Math.PI*2); ctx.fill();
+      break;
+    case 'ArcticWolf': case 'Meerkat': case 'FennecFox': {
+      const eh = type==='FennecFox' ? 1.5 : 1.1;
+      ctx.fillStyle=color;
+      ctx.beginPath(); ctx.moveTo(x,y+r*.95); ctx.lineTo(x-r*.42,y+r*.1); ctx.lineTo(x+r*.42,y+r*.1); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x-r*.4,y-r*.7); ctx.lineTo(x-r*.7,y-r*eh); ctx.lineTo(x-r*.05,y-r*.85); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x+r*.4,y-r*.7); ctx.lineTo(x+r*.7,y-r*eh); ctx.lineTo(x+r*.05,y-r*.85); ctx.fill();
+      break;
+    }
+    case 'Sabertooth':
+      ctx.fillStyle=color;
+      ctx.beginPath(); ctx.moveTo(x-r*.6,y-r*.6); ctx.lineTo(x-r*.95,y-r*1.35); ctx.lineTo(x-r*.15,y-r*.8); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x+r*.6,y-r*.6); ctx.lineTo(x+r*.95,y-r*1.35); ctx.lineTo(x+r*.15,y-r*.8); ctx.fill();
+      ctx.fillStyle='#fffff0';
+      ctx.beginPath(); ctx.moveTo(x-r*.18,y+r*.4); ctx.lineTo(x-r*.32,y+r*1.05); ctx.lineTo(x-r*.04,y+r*1.05); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x+r*.18,y+r*.4); ctx.lineTo(x+r*.32,y+r*1.05); ctx.lineTo(x+r*.04,y+r*1.05); ctx.fill();
+      break;
+    case 'Komodo': case 'Lizard':
+      ctx.fillStyle=color; ctx.beginPath(); ctx.ellipse(x,y+r*.5,r*.95,r*.5,0,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#ff2200'; ctx.lineWidth=2*scale;
+      ctx.beginPath(); ctx.moveTo(x,y+r*.5); ctx.lineTo(x-r*.22,y+r*1.1); ctx.moveTo(x,y+r*.5); ctx.lineTo(x+r*.22,y+r*1.1); ctx.stroke();
+      break;
+    case 'BlackMamba': case 'Sidewinder':
+      ctx.strokeStyle='#ff2200'; ctx.lineWidth=2*scale;
+      ctx.beginPath(); ctx.moveTo(x,y+r*.4); ctx.lineTo(x-r*.28,y+r*1.05); ctx.moveTo(x,y+r*.4); ctx.lineTo(x+r*.28,y+r*1.05); ctx.stroke();
+      break;
+    case 'Camel':
+      ctx.fillStyle=color; ctx.beginPath(); ctx.ellipse(x,y+r*.55,r*.6,r*.55,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x-r*.82,y-r*.45,r*.22,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+r*.82,y-r*.45,r*.22,0,Math.PI*2); ctx.fill();
+      break;
+    case 'Scorpion':
+      ctx.fillStyle='#443311';
+      ctx.beginPath(); ctx.ellipse(x-r*1.35,y,r*.42,r*.25,-0.3,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x+r*1.35,y,r*.42,r*.25,0.3,0,Math.PI*2); ctx.fill();
+      break;
+    case 'Salamander':
+      ctx.strokeStyle='#ff3300'; ctx.lineWidth=3*scale;
+      for(let i=-2;i<=2;i++){ctx.beginPath();ctx.moveTo(x+i*r*.35,y-r*.8);ctx.lineTo(x+i*r*.35,y-r*1.55);ctx.stroke();}
+      break;
+    default:
+      ctx.fillStyle=color;
+      ctx.beginPath(); ctx.arc(x-r*.75,y-r*.75,r*.32,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+r*.75,y-r*.75,r*.32,0,Math.PI*2); ctx.fill();
+  }
+
+  // Eyes
+  if (!['BlackMamba','Sidewinder','Scorpion'].includes(type)) {
+    ctx.fillStyle='#111';
+    ctx.beginPath(); ctx.arc(x-r*.35,y-r*.1,r*.13,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+r*.35,y-r*.1,r*.13,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='white';
+    ctx.beginPath(); ctx.arc(x-r*.3,y-r*.15,r*.05,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+r*.4,y-r*.15,r*.05,0,Math.PI*2); ctx.fill();
+  }
 }
