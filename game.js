@@ -58,9 +58,9 @@ function init3D() {
   scene.fog = new THREE.Fog(0x080810, 28, 68);
   scene.background = new THREE.Color(0x080810);
 
-  camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 1000);
-  camera.position.set(0,14,22);
-  camera.lookAt(0,0,0);
+  camera = new THREE.PerspectiveCamera(52, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 10, 18);
+  camera.lookAt(0, 2, 0);
 
   renderer = new THREE.WebGLRenderer({canvas:document.getElementById('game-canvas'), antialias:true});
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -68,19 +68,23 @@ function init3D() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 1.35;
 
-  scene.add(new THREE.AmbientLight(0x222233, 1.0));
+  // Arena lighting
+  scene.add(new THREE.AmbientLight(0x334455, 1.3));
+  scene.add(new THREE.HemisphereLight(0x88aacc, 0x443322, 0.65));
   for(const x of [-6,0,6]) for(const z of [-10,0,10]) {
-    const pt = new THREE.PointLight(0xfff5ee, 0.55, 32);
-    pt.position.set(x,12,z); scene.add(pt);
+    const pt = new THREE.PointLight(0xfff5ee, 0.72, 38);
+    pt.position.set(x, 12, z); scene.add(pt);
   }
-  const makeSpot = (px,pz,tx,tz) => {
-    const s = new THREE.SpotLight(0xffffff,1.4,22,Math.PI/8,0.3);
-    s.position.set(px,10,pz); s.target.position.set(tx,3,tz);
+  const makeSpot = (px, pz, tx, tz) => {
+    const s = new THREE.SpotLight(0xffffff, 2.0, 32, Math.PI/7, 0.22);
+    s.position.set(px, 12, pz); s.target.position.set(tx, 0, tz);
     scene.add(s); scene.add(s.target);
   };
-  makeSpot(0,-13,0,-13); makeSpot(0,13,0,13);
+  // Four corner-ish spots for even arena coverage
+  makeSpot(-5, -12, 0, -8); makeSpot(5, -12, 0, -8);
+  makeSpot(-5,  12, 0,  8); makeSpot(5,  12, 0,  8);
 
   buildCourt(); buildBall();
   clock = new THREE.Clock();
@@ -95,21 +99,35 @@ function init3D() {
 // ===== COURT =====
 function buildCourt() {
   const W=CONSTANTS.COURT_W, L=CONSTANTS.COURT_L;
+
+  // Maple hardwood floor via canvas texture
+  const ftc = Object.assign(document.createElement('canvas'), {width:512, height:1024});
+  const fctx = ftc.getContext('2d');
+  fctx.fillStyle = '#c07830'; fctx.fillRect(0,0,512,1024);
+  // Board strips with natural variation
+  for (let y=0; y<1024; y+=46) {
+    const v = (Math.random()-.5)*30;
+    fctx.fillStyle = `rgb(${Math.round(198+v)},${Math.round(122+v*.6)},${Math.round(44+v*.2)})`;
+    fctx.fillRect(0, y+1, 512, 44);
+  }
+  // Board joints
+  fctx.strokeStyle = '#7a4a18'; fctx.lineWidth = 2;
+  for (let y=0; y<1024; y+=46) { fctx.beginPath(); fctx.moveTo(0,y); fctx.lineTo(512,y); fctx.stroke(); }
+  // Subtle wood grain
+  fctx.strokeStyle = 'rgba(0,0,0,0.05)'; fctx.lineWidth = 1;
+  for (let x=0; x<512; x+=5) { fctx.beginPath(); fctx.moveTo(x,0); fctx.lineTo(x+Math.random()*3-1,1024); fctx.stroke(); }
+  const floorTex = new THREE.CanvasTexture(ftc);
+  floorTex.wrapS = THREE.RepeatWrapping; floorTex.wrapT = THREE.RepeatWrapping;
+  floorTex.repeat.set(3, 6);
+
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(W,L,20,40),
-    new THREE.MeshStandardMaterial({color:0xcc8844,roughness:0.55,metalness:0.05})
+    new THREE.PlaneGeometry(W, L, 1, 1),
+    new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.38, metalness: 0.10 })
   );
   floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
 
-  // Board lines
-  const bm = new THREE.LineBasicMaterial({color:0xbb7733,transparent:true,opacity:0.35});
-  for(let z=-L/2;z<L/2;z+=0.18) {
-    scene.add(new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-W/2,0.005,z),new THREE.Vector3(W/2,0.005,z)]),bm));
-  }
-
-  const lm = new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.85});
-  const pm = new THREE.MeshBasicMaterial({color:0x884422,transparent:true,opacity:0.3,side:THREE.DoubleSide});
+  const lm = new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.92});
+  const pm = new THREE.MeshBasicMaterial({color:0x994422,transparent:true,opacity:0.32,side:THREE.DoubleSide});
 
   function ln(pts) {
     scene.add(new THREE.Line(
@@ -153,17 +171,46 @@ function buildCourt() {
 
   // Center logo
   const clogo=new THREE.Mesh(new THREE.CircleGeometry(2.5,32),
-    new THREE.MeshBasicMaterial({color:0x1a7a1a,transparent:true,opacity:0.2,side:THREE.DoubleSide}));
+    new THREE.MeshBasicMaterial({color:0x1a7a1a,transparent:true,opacity:0.28,side:THREE.DoubleSide}));
   clogo.rotation.x=-Math.PI/2; clogo.position.y=.007; scene.add(clogo);
 
-  // Arena walls
-  const wm=new THREE.MeshStandardMaterial({color:0x0d0d14,roughness:1});
-  for(const [x,y,z,ww,wh,wd] of [
-    [0,3,L/2+1.5,W+10,6,.5],[0,3,-L/2-1.5,W+10,6,.5],
-    [W/2+1.5,3,0,.5,6,L+5],[-W/2-1.5,3,0,.5,6,L+5]
+  // Crowd stands — tiered rows around the court
+  const rowColors = [0x3a1a4a, 0x2a1a5a, 0x1a2a5a, 0x1a3a4a];
+  const rowH = 1.0, rowD = 1.6;
+  for (let row = 0; row < 5; row++) {
+    const cm = new THREE.MeshLambertMaterial({ color: rowColors[row % rowColors.length] });
+    const yPos = rowH * 0.5 + row * rowH;
+    const riseZ = 2.5 + row * rowD, riseX = 2.5 + row * rowD;
+    // End stands (behind each hoop)
+    for (const sg of [-1, 1]) {
+      scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(W+12+row*2, rowH, rowD), cm),
+        {position: new THREE.Vector3(0, yPos, sg*(L/2 + riseZ))}));
+    }
+    // Side stands
+    for (const sg of [-1, 1]) {
+      scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(rowD, rowH, L+8+row*2), cm),
+        {position: new THREE.Vector3(sg*(W/2 + riseX), yPos, 0)}));
+    }
+  }
+
+  // Back wall behind stands
+  const wm = new THREE.MeshStandardMaterial({color:0x080812, roughness:1});
+  for (const [x,y,z,ww,wh,wd] of [
+    [0,5,L/2+10,W+24,10,.5], [0,5,-L/2-10,W+24,10,.5],
+    [W/2+10,5,0,.5,10,L+22], [-W/2-10,5,0,.5,10,L+22]
   ]) {
-    const w=new THREE.Mesh(new THREE.BoxGeometry(ww,wh,wd),wm);
+    const w = new THREE.Mesh(new THREE.BoxGeometry(ww,wh,wd), wm);
     w.position.set(x,y,z); scene.add(w);
+  }
+
+  // Overhead jumbotron / scoreboard
+  const jbm = new THREE.MeshStandardMaterial({color:0x111111});
+  const jb = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.7, 1.8), jbm);
+  jb.position.set(0, 11.5, 0); scene.add(jb);
+  for (const sg of [-1,1]) {
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(4.3, 0.65),
+      new THREE.MeshBasicMaterial({color:0xff5500, transparent:true, opacity:0.75, side:THREE.DoubleSide}));
+    panel.position.set(0, 11.5, sg*0.92); scene.add(panel);
   }
 }
 
@@ -654,12 +701,14 @@ function attemptDefensivePlay(def) {
 function updateCamera(dt) {
   if(!p1CtrlPlayer) return;
   if(camMode==='BROADCAST'){
-    camera.position.lerp(new THREE.Vector3(ball.position.x*.4,14,20),dt*3);
-    camera.lookAt(ball.position.x*.5,1,0);
+    // Lower, closer broadcast — tracks ball x and lifts slightly when ball is in the air
+    camera.position.lerp(new THREE.Vector3(ball.position.x*.35, 10, 16), dt*4);
+    camera.lookAt(ball.position.x*.4, Math.max(1.8, ball.position.y*.3), 0);
   } else {
-    const off=new THREE.Vector3(0,5,9).applyEuler(new THREE.Euler(0,p1CtrlPlayer.rotation.y,0));
-    camera.position.lerp(p1CtrlPlayer.position.clone().add(off),dt*6);
-    camera.lookAt(p1CtrlPlayer.position.clone().add(new THREE.Vector3(0,1.5,0)));
+    // Tighter follow cam behind the controlled player
+    const off = new THREE.Vector3(0, 4, 7).applyEuler(new THREE.Euler(0, p1CtrlPlayer.rotation.y, 0));
+    camera.position.lerp(p1CtrlPlayer.position.clone().add(off), dt*7);
+    camera.lookAt(p1CtrlPlayer.position.clone().add(new THREE.Vector3(0, 2, 0)));
   }
 }
 
@@ -858,10 +907,23 @@ function buildAnimalFeatures3D(group, type, hy, r, h, animalMat) {
       put(new THREE.BoxGeometry(r*.55,r*.30,r*.20), dark, 0, hy-r*.2, r*.92);
       break;
 
-    case 'Giraffe':
+    case 'Giraffe': {
+      // Ossicone horns
       for (const s of [-1,1])
         put(new THREE.CylinderGeometry(r*.07,r*.10,r*.6,6), gold, s*r*.35, hy+r*1.1, 0);
+      // Long distinctive neck — extends well below the head down into the torso
+      const neckLen = h * 0.38;
+      const neckMid = hy - headR - neckLen * 0.5;
+      put(new THREE.CylinderGeometry(r*.55, r*.72, neckLen, 10), animalMat, 0, neckMid, 0);
+      // Giraffe spot patches (dark blobs on neck)
+      const spotMat = new THREE.MeshLambertMaterial({ color: 0x8b5e1a });
+      for (let i = 0; i < 5; i++) {
+        const sy = neckMid - neckLen*0.35 + i*(neckLen*0.18);
+        const sx = (i%2 === 0 ? 1 : -1) * r * 0.45;
+        put(new THREE.SphereGeometry(r*.32, 6, 5), spotMat, sx, sy, r*.45);
+      }
       break;
+    }
 
     case 'Alligator':
       put(new THREE.BoxGeometry(r*1.7,r*.38,r*1.15), animalMat, 0, hy-r*.48, r*.82);
@@ -925,18 +987,38 @@ function buildAnimalFeatures3D(group, type, hy, r, h, animalMat) {
         put(new THREE.CylinderGeometry(r*.025,r*.025,r*.48,4), red, s*r*.1, hy-r*.1, r*1.12, Math.PI/2,0,s*.15);
       break;
 
-    case 'Camel':
+    case 'Camel': {
+      // Snout
       put(new THREE.CylinderGeometry(r*.36,r*.42,r*.82,9), animalMat, 0, hy-r*.52, r*.68, Math.PI/2.3);
+      // Nostrils
       for (const s of [-1,1])
         put(new THREE.SphereGeometry(r*.09,5,5), dark, s*r*.16, hy-r*.58, r*1.02);
+      // Hump — sits on the back of the torso (behind the body, negative z)
+      const humpY = hy - headR - h*0.26;
+      const hump = put(new THREE.SphereGeometry(r*1.15, 9, 7), animalMat, 0, humpY, -r*0.9);
+      hump.scale.set(0.8, 0.72, 0.75);
       break;
+    }
 
-    case 'Scorpion':
+    case 'Scorpion': {
+      // Pincers near the hands (wrist height ≈ h*0.45 from ground)
+      const wristY = h * 0.45;
+      const clawMat = LM(0x443311);
       for (const s of [-1,1]) {
-        put(new THREE.CylinderGeometry(r*.1,r*.16,r*.65,6), LM(0x443311), s*r*1.1, hy, 0, 0,0,s*-.8);
-        put(new THREE.SphereGeometry(r*.22,6,6), LM(0x443311), s*r*1.55, hy+r*.12, 0);
+        // Pincer arm extending outward from wrist
+        put(new THREE.CylinderGeometry(r*.12,r*.18,r*.75,6), clawMat, s*r*1.85, wristY, 0, 0,0,s*-.65);
+        // Claw ball joint
+        put(new THREE.SphereGeometry(r*.25,6,6), clawMat, s*r*2.45, wristY+r*.15, 0);
+        // Upper claw finger
+        put(new THREE.ConeGeometry(r*.08,r*.42,5), clawMat, s*r*2.65, wristY+r*.52, 0, 0,0,s*-.4);
+        // Lower claw finger
+        put(new THREE.ConeGeometry(r*.07,r*.38,5), clawMat, s*r*2.62, wristY-.08, 0, 0,0,s*.35);
       }
+      // Small antennae on head
+      for (const s of [-1,1])
+        put(new THREE.CylinderGeometry(r*.03,r*.03,r*.55,4), clawMat, s*r*.3, hy+r*.85, 0, -.35,0,s*.2);
       break;
+    }
 
     case 'Salamander':
       for (let i=-2;i<=2;i++)
@@ -946,271 +1028,5 @@ function buildAnimalFeatures3D(group, type, hy, r, h, animalMat) {
     default:
       for (const s of [-1,1])
         put(new THREE.SphereGeometry(r*.3,7,7), animalMat, s*r*.88, hy+r*.82, 0);
-  }
-}
-
-// ===== stub kept to avoid reference errors — no longer used =====
-function drawCharacters2D() {
-  if (!charCanvas || !players.length) return;
-  const ctx = charCtx;
-  ctx.clearRect(0, 0, charCanvas.width, charCanvas.height);
-
-  const sorted = [...players].filter(p => !p.bench).sort((a,b) =>
-    camera.position.distanceTo(b.position) - camera.position.distanceTo(a.position)
-  );
-
-  sorted.forEach(p => {
-    const feetNDC = p.position.clone().project(camera);
-    if (feetNDC.z > 1) return;
-    // Screen position of feet (y=0 ground)
-    const footX = (feetNDC.x * 0.5 + 0.5) * charCanvas.width;
-    const footY = (-feetNDC.y * 0.5 + 0.5) * charCanvas.height;
-    // Screen position of top of head using actual player height
-    const heightM = parseHeight(p.pd.ht) * 0.0254; // inches → metres
-    const topPos = p.position.clone(); topPos.y = heightM;
-    const topNDC = topPos.clone().project(camera);
-    const topY = (-topNDC.y * 0.5 + 0.5) * charCanvas.height;
-    const charH = Math.max(18, footY - topY);
-    drawPlayerSprite(ctx, p, footX, footY, charH);
-  });
-}
-
-function drawPlayerSprite(ctx, player, x, y, charH) {
-  // charH = total pixel height of character at current perspective
-  const pd = player.pd;
-  const tc = '#' + player.teamCol.toString(16).padStart(6, '0');
-  const ac = '#' + (pd.animalColor || 0xaa8855).toString(16).padStart(6, '0');
-  const sk = '#' + (pd.skinColor || 0xf0c080).toString(16).padStart(6, '0');
-  const s  = charH / 55; // line-width scale
-
-  const spd = player.vel.length();
-  const moving = spd > 0.5;
-  player.animTimer += 0.016 * (moving ? spd * 3.5 : 2.5);
-  const bob      = moving ? Math.sin(player.animTimer * 8) * s * 1.8 : Math.sin(player.animTimer * 2) * s * 0.6;
-  const legSwing = moving ? Math.sin(player.animTimer * 8) * s * 7   : 0;
-
-  // Proportions relative to charH
-  const headR  = charH * 0.15;
-  const torsoH = charH * 0.28;
-  const torsoW = charH * 0.30;
-  const shortsH = charH * 0.10;
-  const legH   = charH * 0.37;
-  // Layout from feet (y) upward: legs → shorts → torso → head
-  const legTopY   = y   - legH + bob;           // top of legs = bottom of shorts
-  const shortsTop = legTopY - shortsH;           // top of shorts = bottom of torso
-  const torsoTop  = shortsTop - torsoH;          // top of torso = bottom of neck
-  const headCY    = torsoTop - headR + s * 1.5; // head centre just above torso
-
-  // Shadow
-  ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = '#000';
-  ctx.beginPath(); ctx.ellipse(x, y, torsoW * 0.9, 3 * s, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
-
-  // Legs (skin coloured)
-  ctx.lineCap = 'round';
-  ctx.lineWidth = 6 * s; ctx.strokeStyle = sk;
-  ctx.beginPath(); ctx.moveTo(x - torsoW * 0.28, shortsTop + shortsH); ctx.lineTo(x - torsoW * 0.28 - legSwing * 0.35, y); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x + torsoW * 0.28, shortsTop + shortsH); ctx.lineTo(x + torsoW * 0.28 + legSwing * 0.35, y); ctx.stroke();
-  // Shoes
-  ctx.lineWidth = 5 * s; ctx.strokeStyle = '#111111';
-  ctx.beginPath(); ctx.moveTo(x - torsoW * 0.28 - legSwing * 0.35, y); ctx.lineTo(x - torsoW * 0.28 - legSwing * 0.35 - 4 * s, y + 2 * s); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x + torsoW * 0.28 + legSwing * 0.35, y); ctx.lineTo(x + torsoW * 0.28 + legSwing * 0.35 + 4 * s, y + 2 * s); ctx.stroke();
-
-  // Shorts
-  ctx.fillStyle = tc;
-  ctx.beginPath(); ctx.roundRect(x - torsoW * 0.55, shortsTop, torsoW * 1.1, shortsH, 2 * s); ctx.fill();
-
-  // Jersey
-  ctx.fillStyle = tc;
-  ctx.beginPath(); ctx.roundRect(x - torsoW * 0.6, torsoTop, torsoW * 1.2, torsoH, 3 * s); ctx.fill();
-
-  // Jersey number
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  ctx.font = `bold ${Math.max(7, 7 * s)}px Arial`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(String(pd.num), x, torsoTop + torsoH * 0.42);
-
-  // Arms (swing opposite to legs)
-  ctx.lineWidth = 5 * s; ctx.strokeStyle = sk;
-  ctx.beginPath(); ctx.moveTo(x - torsoW * 0.6, torsoTop + torsoH * 0.18); ctx.lineTo(x - torsoW * 1.05, torsoTop + torsoH * 0.62 + legSwing * 0.2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x + torsoW * 0.6, torsoTop + torsoH * 0.18); ctx.lineTo(x + torsoW * 1.05, torsoTop + torsoH * 0.62 - legSwing * 0.2); ctx.stroke();
-
-  // Neck
-  ctx.fillStyle = sk;
-  ctx.beginPath(); ctx.ellipse(x, torsoTop + s, 2.5 * s, 3.5 * s, 0, 0, Math.PI * 2); ctx.fill();
-
-  // Animal head
-  drawAnimalHead2D(ctx, pd.type, x, headCY, headR, ac, s);
-
-  // Ball held indicator
-  if (player === ballHolder) {
-    const ballR = charH * 0.11;
-    const bx = x + torsoW * 0.95, ballY = torsoTop + torsoH * 0.35;
-    ctx.fillStyle = '#ff6600';
-    ctx.beginPath(); ctx.arc(bx, ballY, ballR, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#331100'; ctx.lineWidth = 1.5 * s; ctx.stroke();
-    ctx.lineWidth = s;
-    ctx.beginPath(); ctx.moveTo(bx - ballR, ballY); ctx.lineTo(bx + ballR, ballY); ctx.stroke();
-    ctx.beginPath(); ctx.arc(bx, ballY, ballR, 0, Math.PI, false); ctx.stroke();
-  }
-
-  // Controlled player indicator
-  if (player === p1CtrlPlayer) {
-    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2 * s;
-    ctx.setLineDash([3 * s, 3 * s]);
-    ctx.beginPath(); ctx.ellipse(x, y + s, torsoW * 0.75, 3.5 * s, 0, 0, Math.PI * 2); ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  // Hot streak
-  if (player.isHot) {
-    ctx.font = `${Math.max(8, 8 * s)}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.fillText('🔥', x, headCY - headR * 1.9);
-  }
-}
-
-function drawAnimalHead2D(ctx, type, x, y, r, color, s) {
-  ctx.fillStyle = color;
-
-  // Head shape varies by animal
-  if (['Gorilla','Bear','PolarBear','Rhino','Bull','Walrus'].includes(type)) {
-    ctx.beginPath(); ctx.arc(x, y, r * 1.2, 0, Math.PI * 2); ctx.fill();
-  } else if (['Giraffe','Horse','Camel'].includes(type)) {
-    ctx.beginPath(); ctx.ellipse(x, y, r * 0.85, r * 1.15, 0, 0, Math.PI * 2); ctx.fill();
-  } else if (['Alligator','Komodo','Lizard'].includes(type)) {
-    ctx.beginPath(); ctx.ellipse(x, y, r * 1.1, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
-  } else if (['BlackMamba','Sidewinder'].includes(type)) {
-    ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.9, y); ctx.lineTo(x, y + r * 0.5); ctx.lineTo(x - r * 0.9, y); ctx.closePath(); ctx.fill();
-  } else if (type === 'Scorpion') {
-    ctx.beginPath(); ctx.moveTo(x, y-r); ctx.lineTo(x+r*0.9,y-r*0.5); ctx.lineTo(x+r*0.9,y+r*0.5); ctx.lineTo(x,y+r); ctx.lineTo(x-r*0.9,y+r*0.5); ctx.lineTo(x-r*0.9,y-r*0.5); ctx.closePath(); ctx.fill();
-  } else {
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-  }
-
-  // Animal-specific features
-  switch(type) {
-    case 'Goat':
-      ctx.strokeStyle='#ccccaa'; ctx.lineWidth=2.5*scale;
-      ctx.beginPath(); ctx.moveTo(x-r*.5,y-r*.7); ctx.bezierCurveTo(x-r*.9,y-r*1.6,x-r*.3,y-r*1.9,x-r*.1,y-r*1.4); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x+r*.5,y-r*.7); ctx.bezierCurveTo(x+r*.9,y-r*1.6,x+r*.3,y-r*1.9,x+r*.1,y-r*1.4); ctx.stroke();
-      ctx.fillStyle='#ddddcc'; ctx.beginPath(); ctx.ellipse(x,y+r*.9,r*.2,r*.35,0,0,Math.PI*2); ctx.fill();
-      break;
-    case 'Lion':
-      ctx.fillStyle='#884400';
-      for(let i=0;i<8;i++){const a=(i/8)*Math.PI*2;ctx.beginPath();ctx.ellipse(x+Math.cos(a)*r*1.25,y+Math.sin(a)*r*1.25,r*.35,r*.5,a,0,Math.PI*2);ctx.fill();}
-      ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x-r*.75,y-r*.75,r*.28,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x+r*.75,y-r*.75,r*.28,0,Math.PI*2); ctx.fill();
-      break;
-    case 'Panther': case 'Jaguar': case 'SnowLeopard': case 'SandCat':
-      ctx.fillStyle=color;
-      ctx.beginPath(); ctx.moveTo(x-r*.6,y-r*.6); ctx.lineTo(x-r*.95,y-r*1.35); ctx.lineTo(x-r*.15,y-r*.8); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x+r*.6,y-r*.6); ctx.lineTo(x+r*.95,y-r*1.35); ctx.lineTo(x+r*.15,y-r*.8); ctx.fill();
-      ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.ellipse(x,y+r*.2,r*.45,r*.35,0,0,Math.PI*2); ctx.fill();
-      break;
-    case 'Rhino':
-      ctx.fillStyle='#aaaaaa'; ctx.beginPath(); ctx.moveTo(x-r*.18,y-r*.85); ctx.lineTo(x+r*.18,y-r*.85); ctx.lineTo(x,y-r*1.9); ctx.fill();
-      break;
-    case 'Bull':
-      ctx.strokeStyle='#ddccaa'; ctx.lineWidth=3.5*scale;
-      ctx.beginPath(); ctx.moveTo(x-r*.7,y-r*.3); ctx.quadraticCurveTo(x-r*1.6,y-r*.9,x-r*1.2,y-r*1.4); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x+r*.7,y-r*.3); ctx.quadraticCurveTo(x+r*1.6,y-r*.9,x+r*1.2,y-r*1.4); ctx.stroke();
-      ctx.strokeStyle='#cccccc'; ctx.lineWidth=2*scale; ctx.beginPath(); ctx.arc(x,y+r*.55,r*.2,0,Math.PI*2); ctx.stroke();
-      break;
-    case 'Horse':
-      ctx.fillStyle=color; ctx.beginPath(); ctx.ellipse(x,y+r*.65,r*.55,r*.55,0,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle='#553300'; ctx.beginPath(); ctx.ellipse(x,y-r*.5,r*.25,r*.75,0,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle=color;
-      ctx.beginPath(); ctx.moveTo(x-r*.45,y-r*.8); ctx.lineTo(x-r*.65,y-r*1.45); ctx.lineTo(x-r*.1,y-r*.9); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x+r*.45,y-r*.8); ctx.lineTo(x+r*.65,y-r*1.45); ctx.lineTo(x+r*.1,y-r*.9); ctx.fill();
-      break;
-    case 'Bear': case 'PolarBear':
-      ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x-r*.9,y-r*.9,r*.35,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x+r*.9,y-r*.9,r*.35,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.ellipse(x,y+r*.25,r*.5,r*.4,0,0,Math.PI*2); ctx.fill();
-      break;
-    case 'Gorilla':
-      ctx.fillStyle=color; ctx.beginPath(); ctx.rect(x-r*1.15,y-r*.55,r*2.3,r*.32); ctx.fill();
-      ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.ellipse(x,y+r*.15,r*.65,r*.7,0,0,Math.PI*2); ctx.fill();
-      break;
-    case 'Giraffe':
-      ctx.fillStyle='#cc8833';
-      ctx.beginPath(); ctx.rect(x-r*.4,y-r*1.05,r*.18,r*.65); ctx.fill();
-      ctx.beginPath(); ctx.rect(x+r*.22,y-r*1.05,r*.18,r*.65); ctx.fill();
-      break;
-    case 'Alligator':
-      ctx.fillStyle=color; ctx.beginPath(); ctx.ellipse(x,y+r*.55,r*.95,r*.5,0,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle='white';
-      for(let i=-2;i<=2;i++){ctx.beginPath();ctx.moveTo(x+i*r*.3,y+r*.3);ctx.lineTo(x+i*r*.3+r*.08,y+r*.75);ctx.lineTo(x+i*r*.3-r*.08,y+r*.75);ctx.fill();}
-      break;
-    case 'Ostrich':
-      ctx.fillStyle='#ffaa00'; ctx.beginPath(); ctx.moveTo(x-r*.2,y+r*.3); ctx.lineTo(x+r*.2,y+r*.3); ctx.lineTo(x,y+r*1.05); ctx.fill();
-      ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x-r*.7,y-r*.75,r*.28,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x+r*.7,y-r*.75,r*.28,0,Math.PI*2); ctx.fill();
-      break;
-    case 'Moose':
-      ctx.strokeStyle='#885533'; ctx.lineWidth=3*scale;
-      ctx.beginPath(); ctx.moveTo(x-r*.4,y-r*.8); ctx.lineTo(x-r*.9,y-r*1.7); ctx.moveTo(x-r*.65,y-r*1.25); ctx.lineTo(x-r*1.2,y-r*1.5); ctx.moveTo(x-r*.75,y-r*1.55); ctx.lineTo(x-r*.4,y-r*1.75); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x+r*.4,y-r*.8); ctx.lineTo(x+r*.9,y-r*1.7); ctx.moveTo(x+r*.65,y-r*1.25); ctx.lineTo(x+r*1.2,y-r*1.5); ctx.moveTo(x+r*.75,y-r*1.55); ctx.lineTo(x+r*.4,y-r*1.75); ctx.stroke();
-      break;
-    case 'Walrus':
-      ctx.fillStyle='#fffff0'; ctx.beginPath(); ctx.ellipse(x-r*.3,y+r*.85,r*.12,r*.48,-0.15,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(x+r*.3,y+r*.85,r*.12,r*.48,0.15,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.ellipse(x,y+r*.25,r*.6,r*.38,0,0,Math.PI*2); ctx.fill();
-      break;
-    case 'ArcticWolf': case 'Meerkat': case 'FennecFox': {
-      const eh = type==='FennecFox' ? 1.5 : 1.1;
-      ctx.fillStyle=color;
-      ctx.beginPath(); ctx.moveTo(x,y+r*.95); ctx.lineTo(x-r*.42,y+r*.1); ctx.lineTo(x+r*.42,y+r*.1); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x-r*.4,y-r*.7); ctx.lineTo(x-r*.7,y-r*eh); ctx.lineTo(x-r*.05,y-r*.85); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x+r*.4,y-r*.7); ctx.lineTo(x+r*.7,y-r*eh); ctx.lineTo(x+r*.05,y-r*.85); ctx.fill();
-      break;
-    }
-    case 'Sabertooth':
-      ctx.fillStyle=color;
-      ctx.beginPath(); ctx.moveTo(x-r*.6,y-r*.6); ctx.lineTo(x-r*.95,y-r*1.35); ctx.lineTo(x-r*.15,y-r*.8); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x+r*.6,y-r*.6); ctx.lineTo(x+r*.95,y-r*1.35); ctx.lineTo(x+r*.15,y-r*.8); ctx.fill();
-      ctx.fillStyle='#fffff0';
-      ctx.beginPath(); ctx.moveTo(x-r*.18,y+r*.4); ctx.lineTo(x-r*.32,y+r*1.05); ctx.lineTo(x-r*.04,y+r*1.05); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x+r*.18,y+r*.4); ctx.lineTo(x+r*.32,y+r*1.05); ctx.lineTo(x+r*.04,y+r*1.05); ctx.fill();
-      break;
-    case 'Komodo': case 'Lizard':
-      ctx.fillStyle=color; ctx.beginPath(); ctx.ellipse(x,y+r*.5,r*.95,r*.5,0,0,Math.PI*2); ctx.fill();
-      ctx.strokeStyle='#ff2200'; ctx.lineWidth=2*scale;
-      ctx.beginPath(); ctx.moveTo(x,y+r*.5); ctx.lineTo(x-r*.22,y+r*1.1); ctx.moveTo(x,y+r*.5); ctx.lineTo(x+r*.22,y+r*1.1); ctx.stroke();
-      break;
-    case 'BlackMamba': case 'Sidewinder':
-      ctx.strokeStyle='#ff2200'; ctx.lineWidth=2*scale;
-      ctx.beginPath(); ctx.moveTo(x,y+r*.4); ctx.lineTo(x-r*.28,y+r*1.05); ctx.moveTo(x,y+r*.4); ctx.lineTo(x+r*.28,y+r*1.05); ctx.stroke();
-      break;
-    case 'Camel':
-      ctx.fillStyle=color; ctx.beginPath(); ctx.ellipse(x,y+r*.55,r*.6,r*.55,0,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x-r*.82,y-r*.45,r*.22,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x+r*.82,y-r*.45,r*.22,0,Math.PI*2); ctx.fill();
-      break;
-    case 'Scorpion':
-      ctx.fillStyle='#443311';
-      ctx.beginPath(); ctx.ellipse(x-r*1.35,y,r*.42,r*.25,-0.3,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(x+r*1.35,y,r*.42,r*.25,0.3,0,Math.PI*2); ctx.fill();
-      break;
-    case 'Salamander':
-      ctx.strokeStyle='#ff3300'; ctx.lineWidth=3*scale;
-      for(let i=-2;i<=2;i++){ctx.beginPath();ctx.moveTo(x+i*r*.35,y-r*.8);ctx.lineTo(x+i*r*.35,y-r*1.55);ctx.stroke();}
-      break;
-    default:
-      ctx.fillStyle=color;
-      ctx.beginPath(); ctx.arc(x-r*.75,y-r*.75,r*.32,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x+r*.75,y-r*.75,r*.32,0,Math.PI*2); ctx.fill();
-  }
-
-  // Eyes
-  if (!['BlackMamba','Sidewinder','Scorpion'].includes(type)) {
-    ctx.fillStyle='#111';
-    ctx.beginPath(); ctx.arc(x-r*.35,y-r*.1,r*.13,0,Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(x+r*.35,y-r*.1,r*.13,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='white';
-    ctx.beginPath(); ctx.arc(x-r*.3,y-r*.15,r*.05,0,Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(x+r*.4,y-r*.15,r*.05,0,Math.PI*2); ctx.fill();
   }
 }
