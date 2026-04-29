@@ -1,4 +1,4 @@
-console.log('%c ROARBALL v2 — 2D sprites, no GLB ', 'background:#1aaa1a;color:white;font-size:14px');
+console.log('%c ROARBALL v3 — 3D procedural characters ', 'background:#1aaa1a;color:white;font-size:14px');
 // ===== CONSTANTS =====
 const CONSTANTS = {
   COURT_W: 15.24, COURT_L: 28.65,
@@ -12,7 +12,7 @@ let scene, camera, renderer, clock;
 let p1Team, p2Team, p1Idx, p2Idx, is2P;
 let mode = 'MENU';
 let players = [];
-let charCanvas, charCtx;
+
 let ball, ballVel = new THREE.Vector3(), ballHolder = null;
 let dt, t = 0;
 let qtr = 1, timeClock = 720, shotClock = 24.0;
@@ -84,16 +84,10 @@ function init3D() {
 
   buildCourt(); buildBall();
   clock = new THREE.Clock();
-  charCanvas = document.getElementById('char-canvas');
-  charCtx = charCanvas.getContext('2d');
-  charCanvas.width = window.innerWidth;
-  charCanvas.height = window.innerHeight;
   window.addEventListener('resize',()=>{
     camera.aspect=window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth,window.innerHeight);
-    charCanvas.width = window.innerWidth;
-    charCanvas.height = window.innerHeight;
   });
   animate();
 }
@@ -229,12 +223,121 @@ function buildBall() {
 }
 
 
-// ===== MAKE PLAYER (position tracker + ground ring only — character drawn on 2D canvas) =====
+// ===== MAKE PLAYER MESH — 3D procedural character =====
 function makePlayerMesh(pd, teamColor, isHome) {
+  const h = parseHeight(pd.ht) * 0.0254; // player height in metres
   const group = new THREE.Group();
-  const ring=new THREE.Mesh(new THREE.RingGeometry(.55,.65,16),
-    new THREE.MeshBasicMaterial({color:teamColor,side:THREE.DoubleSide,transparent:true,opacity:.7}));
-  ring.rotation.x=-Math.PI/2; ring.position.y=.02; group.add(ring);
+
+  // Jersey number canvas texture
+  const nc = Object.assign(document.createElement('canvas'), {width:128,height:256});
+  const nctx = nc.getContext('2d');
+  nctx.fillStyle = '#' + teamColor.toString(16).padStart(6,'0');
+  nctx.fillRect(0,0,128,256);
+  nctx.fillStyle = 'rgba(255,255,255,0.92)'; nctx.font = 'bold 80px Arial';
+  nctx.textAlign = 'center'; nctx.textBaseline = 'middle';
+  nctx.fillText(String(pd.num), 64, 128);
+
+  const jerseyMat = new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(nc) });
+  const shortsMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(teamColor).multiplyScalar(0.6) });
+  const skinMat   = new THREE.MeshLambertMaterial({ color: pd.skinColor  || 0xf0c090 });
+  const animalMat = new THREE.MeshLambertMaterial({ color: pd.animalColor || 0xaa8855 });
+  const shoeMat   = new THREE.MeshLambertMaterial({ color: 0x151515 });
+
+  // Proportions — all relative to player height h, sum to ≈ h
+  const shoeH  = h*.054, lLegH = h*.20, uLegH = h*.18, shortsH = h*.08;
+  const torsoH = h*.24,  neckH = h*.03, headR = h*.11;
+  const uArmH  = h*.16,  fArmH = h*.14;
+  const legSep = h*.07,  legR  = h*.058, armR = h*.042;
+
+  // Key Y positions (from ground)
+  const hipY      = shoeH + lLegH + uLegH;
+  const shortsYc  = hipY  + shortsH * .5;
+  const torsoYc   = hipY  + shortsH + torsoH * .5;
+  const shoulderY = hipY  + shortsH + torsoH;
+  const neckYc    = shoulderY + neckH * .5;
+  const headY     = shoulderY + neckH + headR;
+  const shldrX    = h * .14; // shoulder half-width
+
+  // Helper: create mesh, position, add to parent
+  const put = (parent, geo, mat, x, y, z) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    parent.add(m);
+    return m;
+  };
+
+  // Shoes
+  for (const s of [-1,1])
+    put(group, new THREE.BoxGeometry(legR*2.4, shoeH, legR*3.8), shoeMat, legSep*s, shoeH*.5, legR*.6);
+
+  // Legs — nested groups so rotation.x swings the limb from the hip
+  for (const s of [-1,1]) {
+    const lg = new THREE.Group();
+    lg.position.set(legSep*s, hipY, 0);
+    group.add(lg);
+    s < 0 ? (group.leftLegGroup = lg) : (group.rightLegGroup = lg);
+
+    put(lg, new THREE.CylinderGeometry(legR*.85, legR*.70, uLegH, 8), skinMat, 0, -uLegH*.5, 0);
+    put(lg, new THREE.SphereGeometry(legR*.72, 7, 7), skinMat, 0, -uLegH, 0); // knee sphere
+
+    const kg = new THREE.Group();
+    kg.position.y = -uLegH; lg.add(kg);
+    s < 0 ? (group.leftKneeGroup = kg) : (group.rightKneeGroup = kg);
+
+    put(kg, new THREE.CylinderGeometry(legR*.62, legR*.52, lLegH, 8), skinMat, 0, -lLegH*.5, 0);
+    put(kg, new THREE.SphereGeometry(legR*.50, 6, 6), skinMat, 0, -lLegH, 0); // ankle
+  }
+
+  // Shorts + torso + neck
+  put(group, new THREE.CylinderGeometry(h*.130, h*.115, shortsH, 12), shortsMat, 0, shortsYc, 0);
+  put(group, new THREE.CylinderGeometry(h*.140, h*.100, torsoH,  12), jerseyMat, 0, torsoYc,  0);
+  put(group, new THREE.CylinderGeometry(h*.040, h*.050, neckH,    8), skinMat,   0, neckYc,   0);
+
+  // Arms — nested groups so rotation.x swings from the shoulder
+  for (const s of [-1,1]) {
+    const ag = new THREE.Group();
+    ag.position.set(shldrX*s, shoulderY, 0);
+    ag.rotation.z = s * .18; // natural outward droop
+    group.add(ag);
+    s < 0 ? (group.leftArmGroup = ag) : (group.rightArmGroup = ag);
+
+    ag.add(new THREE.Mesh(new THREE.SphereGeometry(armR*1.1, 7, 7), skinMat)); // shoulder sphere
+    put(ag, new THREE.CylinderGeometry(armR*.78, armR*.66, uArmH, 7), skinMat, 0, -uArmH*.5, 0);
+
+    const eg = new THREE.Group(); eg.position.y = -uArmH; ag.add(eg);
+    s < 0 ? (group.leftElbowGroup = eg) : (group.rightElbowGroup = eg);
+
+    eg.add(new THREE.Mesh(new THREE.SphereGeometry(armR*.65, 6, 6), skinMat)); // elbow sphere
+    put(eg, new THREE.CylinderGeometry(armR*.55, armR*.44, fArmH, 7), skinMat, 0, -fArmH*.5, 0);
+    put(eg, new THREE.SphereGeometry(armR*.52, 6, 6), skinMat, 0, -fArmH, 0); // hand
+  }
+
+  // Head
+  const headMesh = new THREE.Mesh(new THREE.SphereGeometry(headR, 14, 14), animalMat);
+  headMesh.position.set(0, headY, 0);
+  group.add(headMesh);
+  group.headMesh = headMesh;
+
+  // Eyes (face local +z = player forward direction)
+  for (const s of [-1,1]) {
+    const ew = new THREE.Mesh(new THREE.SphereGeometry(headR*.14,6,6),
+      new THREE.MeshBasicMaterial({color:0xffffff}));
+    ew.position.set(s*headR*.38, headY-headR*.05, headR*.88); group.add(ew);
+    const ep = new THREE.Mesh(new THREE.SphereGeometry(headR*.10,5,5),
+      new THREE.MeshBasicMaterial({color:0x111111}));
+    ep.position.set(s*headR*.38, headY-headR*.05, headR*.93); group.add(ep);
+  }
+
+  // Animal-specific head features
+  buildAnimalFeatures3D(group, pd.type, headY, headR, h, animalMat);
+
+  // Ground ring — position indicator
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(.55,.65,16),
+    new THREE.MeshBasicMaterial({color:teamColor,side:THREE.DoubleSide,transparent:true,opacity:.7})
+  );
+  ring.rotation.x = -Math.PI/2; ring.position.y = .02; group.add(ring);
+
   group.pd=pd; group.teamCol=teamColor; group.isHome=isHome; group.bench=false;
   group.vel=new THREE.Vector3(); group.posTarget=new THREE.Vector3();
   group.animTimer=Math.random()*10;
@@ -500,6 +603,25 @@ function updateMovement(dt) {
       p.rotation.y+=diff*4*dt;
     }
     p.animTimer+=dt*(spd>.4?spd*3.5:2.5);
+    // Limb swing animation — rotate nested groups around pivot points
+    if (p.leftLegGroup) {
+      const mv = spd > 0.4;
+      const amt = mv ? Math.min(spd * 0.09, 0.48) : 0.04;
+      const sw  = Math.sin(p.animTimer * 8) * amt;
+      // positive rotation.x = foot swings to -z (backward), so negate for forward swing
+      p.leftLegGroup.rotation.x  = -sw;
+      p.rightLegGroup.rotation.x =  sw;
+      // Slight knee bend when leg is at the back of its swing
+      p.leftKneeGroup.rotation.x  = mv ? Math.max(0,  sw) * 0.45 : 0;
+      p.rightKneeGroup.rotation.x = mv ? Math.max(0, -sw) * 0.45 : 0;
+      // Arms swing opposite to ipsilateral leg
+      p.leftArmGroup.rotation.x  =  sw * 0.5;
+      p.rightArmGroup.rotation.x = -sw * 0.5;
+    }
+    // Raise shooting arm when shot meter is active
+    if (shotMeterActive && p === p1CtrlPlayer && p.rightArmGroup) {
+      p.rightArmGroup.rotation.x = -1.85;
+    }
   });
 }
 
@@ -604,7 +726,6 @@ function animate() {
   updateMomentum();
   runAI(dt); updateMovement(dt); updatePhysics(dt); updateCamera(dt);
   renderer.render(scene,camera);
-  drawCharacters2D();
 }
 
 // ===== INPUT =====
@@ -653,7 +774,182 @@ function renderSubPanel(){
   });
 }
 
-// ===== 2D CHARACTER RENDERING =====
+// ===== 3D ANIMAL HEAD FEATURES =====
+// buildAnimalFeatures3D is called once per player at spawn time.
+// group   — the player THREE.Group
+// type    — pd.type string  ('Goat', 'Lion', etc.)
+// hy      — head sphere centre Y in group local space
+// r       — head radius
+// h       — full player height
+// animalMat — base MeshLambertMaterial for this animal
+function buildAnimalFeatures3D(group, type, hy, r, h, animalMat) {
+  const LM = c => new THREE.MeshLambertMaterial({ color: c });
+  const put = (geo, mat, x, y, z, rx, ry, rz) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    if (rx) m.rotation.set(rx, ry||0, rz||0);
+    group.add(m); return m;
+  };
+
+  // Reusable materials
+  const grey  = LM(0xaaaaaa);
+  const cream = LM(0xddccaa);
+  const white = LM(0xfffff0);
+  const brown = LM(0x885533);
+  const dark  = LM(0x221100);
+  const gold  = LM(0xdd9944);
+  const red   = LM(0xff3300);
+
+  // Curved horn helper (uses TubeGeometry + CatmullRomCurve3)
+  const addHorn = (x0,y0,z0, x1,y1,z1, x2,y2,z2, mat, rad) => {
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(x0,y0,z0), new THREE.Vector3(x1,y1,z1), new THREE.Vector3(x2,y2,z2)
+    ]);
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(curve,8,rad||r*.1,6,false), mat||grey));
+  };
+
+  switch (type) {
+
+    case 'Goat':
+      for (const s of [-1,1])
+        addHorn(s*r*.4, hy-r*.6, r*.3,  s*r*.9, hy+r*.2, 0,  s*r*.55, hy+r*.85, -r*.3, grey, r*.1);
+      put(new THREE.CylinderGeometry(r*.08,r*.16,r*.5,6), LM(0xddddcc), 0, hy-r*1.2, r*.3);
+      break;
+
+    case 'Lion':
+      for (let i=0;i<9;i++){
+        const a=(i/9)*Math.PI*2;
+        put(new THREE.SphereGeometry(r*.38,7,7), LM(0x884400),
+          Math.cos(a)*r*1.25, hy+Math.sin(a)*r*.5, Math.sin(a)*r*.3);
+      }
+      for (const s of [-1,1])
+        put(new THREE.SphereGeometry(r*.3,7,7), animalMat, s*r*.88, hy+r*.82, 0);
+      break;
+
+    case 'Bear': case 'PolarBear':
+      for (const s of [-1,1]) {
+        put(new THREE.SphereGeometry(r*.32,7,7), animalMat, s*r*.9, hy+r*.85, -r*.1);
+        put(new THREE.SphereGeometry(r*.15,5,5), dark, s*r*.9, hy+r*.85, r*.22);
+      }
+      put(new THREE.SphereGeometry(r*.45,9,9), animalMat, 0, hy-r*.2, r*.75);
+      break;
+
+    case 'Rhino':
+      put(new THREE.ConeGeometry(r*.12,r*.72,8), grey, 0, hy+r*.5, r*.82, -Math.PI/4);
+      for (const s of [-1,1])
+        put(new THREE.SphereGeometry(r*.2,6,6), animalMat, s*r*.78, hy+r*.82, 0);
+      break;
+
+    case 'Bull':
+      for (const s of [-1,1])
+        addHorn(s*r*.55,hy+r*.3,0, s*r*1.5,hy+r*.65,0, s*r*1.3,hy+r*1.15,0, cream, r*.1);
+      put(new THREE.TorusGeometry(r*.22,r*.04,6,12), LM(0xbbbbbb), 0, hy-r*.5, r*.92, Math.PI/2);
+      break;
+
+    case 'Horse':
+      put(new THREE.CylinderGeometry(r*.42,r*.48,r*.9,10), animalMat, 0, hy-r*.5, r*.65, Math.PI/2.4);
+      for (const s of [-1,1])
+        put(new THREE.ConeGeometry(r*.18,r*.48,6), animalMat, s*r*.6, hy+r*.88, 0, 0,0,s*-.28);
+      put(new THREE.CylinderGeometry(r*.08,r*.18,r*.55,6), LM(0x553300), 0, hy+r*.8, -r*.25);
+      break;
+
+    case 'Gorilla':
+      put(new THREE.BoxGeometry(r*2.2,r*.24,r*.35), animalMat, 0, hy+r*.12, r*.82);
+      put(new THREE.BoxGeometry(r*.55,r*.30,r*.20), dark, 0, hy-r*.2, r*.92);
+      break;
+
+    case 'Giraffe':
+      for (const s of [-1,1])
+        put(new THREE.CylinderGeometry(r*.07,r*.10,r*.6,6), gold, s*r*.35, hy+r*1.1, 0);
+      break;
+
+    case 'Alligator':
+      put(new THREE.BoxGeometry(r*1.7,r*.38,r*1.15), animalMat, 0, hy-r*.48, r*.82);
+      for (let i=-2;i<=2;i++)
+        put(new THREE.ConeGeometry(r*.07,r*.22,4), white, i*r*.28, hy-r*.35, r*1.3);
+      break;
+
+    case 'Ostrich':
+      put(new THREE.ConeGeometry(r*.13,r*.62,6), LM(0xffaa00), 0, hy-r*.3, r*.95, Math.PI/2);
+      for (const s of [-1,1])
+        put(new THREE.SphereGeometry(r*.12,5,5), animalMat, s*r*.92, hy+r*.1, r*.3);
+      break;
+
+    case 'Moose':
+      for (const s of [-1,1]) {
+        put(new THREE.CylinderGeometry(r*.08,r*.10,r*.65,6), brown, s*r*.45, hy+r*.78, 0, 0,0,s*-.28);
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(r*1.05,r*.12,r*.72), brown);
+        plate.position.set(s*r*1.0, hy+r*1.1, 0); plate.rotation.z = s*.3; group.add(plate);
+        put(new THREE.CylinderGeometry(r*.05,r*.07,r*.4,5), brown, s*r*1.35, hy+r*1.22, 0);
+      }
+      break;
+
+    case 'Walrus':
+      for (const s of [-1,1])
+        put(new THREE.CylinderGeometry(r*.07,r*.11,r*.9,6), white, s*r*.35, hy-r*.95, r*.55, .3);
+      put(new THREE.SphereGeometry(r*.52,9,9), animalMat, 0, hy-r*.22, r*.72);
+      break;
+
+    case 'ArcticWolf': case 'Meerkat': case 'FennecFox': {
+      const eh = type==='FennecFox' ? r*.9 : r*.62;
+      const ew = type==='FennecFox' ? r*.38 : r*.25;
+      for (const s of [-1,1])
+        put(new THREE.ConeGeometry(ew,eh,6), animalMat, s*r*.62, hy+r*.9+eh*.3, 0, 0,0,s*.18);
+      put(new THREE.ConeGeometry(r*.20,r*.68,8), animalMat, 0, hy-r*.45, r*.85, Math.PI/2.2);
+      break;
+    }
+
+    case 'Sabertooth':
+      for (const s of [-1,1]) {
+        put(new THREE.ConeGeometry(r*.23,r*.48,6), animalMat, s*r*.65, hy+r*.82, 0, 0,0,s*.22);
+        put(new THREE.ConeGeometry(r*.09,r*.68,6), white, s*r*.25, hy-r*.62, r*.78, .22,0,s*.1);
+      }
+      put(new THREE.SphereGeometry(r*.36,8,8), animalMat, 0, hy-r*.22, r*.85);
+      break;
+
+    case 'Panther': case 'Jaguar': case 'SnowLeopard': case 'SandCat':
+      for (const s of [-1,1])
+        put(new THREE.ConeGeometry(r*.23,r*.48,6), animalMat, s*r*.65, hy+r*.82, 0, 0,0,s*.22);
+      put(new THREE.SphereGeometry(r*.36,8,8), animalMat, 0, hy-r*.22, r*.85);
+      break;
+
+    case 'Komodo': case 'Lizard':
+      put(new THREE.BoxGeometry(r*1.45,r*.32,r*.75), animalMat, 0, hy-r*.32, r*.72);
+      for (const s of [-1,1])
+        put(new THREE.CylinderGeometry(r*.03,r*.03,r*.5,4), red, s*r*.12, hy-r*.42, r*1.18, Math.PI/2.2,0,s*.15);
+      break;
+
+    case 'BlackMamba': case 'Sidewinder':
+      put(new THREE.ConeGeometry(r*.5,r*.72,4), animalMat, 0, hy-r*.15, r*.5, Math.PI/2,Math.PI/4);
+      for (const s of [-1,1])
+        put(new THREE.CylinderGeometry(r*.025,r*.025,r*.48,4), red, s*r*.1, hy-r*.1, r*1.12, Math.PI/2,0,s*.15);
+      break;
+
+    case 'Camel':
+      put(new THREE.CylinderGeometry(r*.36,r*.42,r*.82,9), animalMat, 0, hy-r*.52, r*.68, Math.PI/2.3);
+      for (const s of [-1,1])
+        put(new THREE.SphereGeometry(r*.09,5,5), dark, s*r*.16, hy-r*.58, r*1.02);
+      break;
+
+    case 'Scorpion':
+      for (const s of [-1,1]) {
+        put(new THREE.CylinderGeometry(r*.1,r*.16,r*.65,6), LM(0x443311), s*r*1.1, hy, 0, 0,0,s*-.8);
+        put(new THREE.SphereGeometry(r*.22,6,6), LM(0x443311), s*r*1.55, hy+r*.12, 0);
+      }
+      break;
+
+    case 'Salamander':
+      for (let i=-2;i<=2;i++)
+        put(new THREE.ConeGeometry(r*.08,r*.45,4), red, i*r*.32, hy+r*.88+r*.22, 0);
+      break;
+
+    default:
+      for (const s of [-1,1])
+        put(new THREE.SphereGeometry(r*.3,7,7), animalMat, s*r*.88, hy+r*.82, 0);
+  }
+}
+
+// ===== stub kept to avoid reference errors — no longer used =====
 function drawCharacters2D() {
   if (!charCanvas || !players.length) return;
   const ctx = charCtx;
